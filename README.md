@@ -11,6 +11,11 @@ Voici la liste des différents fichiers proposés dans AXTRO :
 		<th>Description</th>	
 	</tr>
 	<tr>
+		<td><b>DISTANCE.PAS</b></td>
+		<td>Cette commande permet d'indiquer la distance entre la planète Terre et un astre.</td>
+	</tr>
+	
+	<tr>
 		<td><b>MOON.PAS</b></td>
 		<td>Cette commande permet d'afficher une phase lunaire dans un mois.</td>
 	</tr>
