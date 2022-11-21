@@ -15,6 +15,10 @@ Voici la liste des différents fichiers proposés dans AXTRO :
 		<td>Cette commande permet d'indiquer la distance entre la planète Terre et un astre.</td>
 	</tr>
 	<tr>
+		<td><b>OBSERV.PAS</b></td>
+		<td>Cette commande permet d'afficher la liste des observatoires d'astronomies.</td>
+	</tr>
+	<tr>
 		<td><b>ORIGIN.PAS</b></td>
 		<td>Cette commande permet d'indiquer l'origine astronomique d'un mot.</td>
 	</tr>	
