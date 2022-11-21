@@ -26,6 +26,10 @@ Voici la liste des différents fichiers proposés dans AXTRO :
 		<td><b>MOON.PAS</b></td>
 		<td>Cette commande permet d'afficher une phase lunaire dans un mois.</td>
 	</tr>
+	<tr>
+		<td><b>PLANET.PAS</b></td>
+		<td>Cette commande permet d'afficher les planètes du système solaire.</td>
+	</tr>	
 </table>
 
 <h2>Compilation</h2>
