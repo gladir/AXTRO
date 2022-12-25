@@ -1,5 +1,5 @@
 # AXTRO
-Liste de commande sur l'astronomie écrit en Pascal.
+Liste de commandes sur l'astronomie écrit en Pascal.
 
 <h2>Liste des fichiers</h2>
 
