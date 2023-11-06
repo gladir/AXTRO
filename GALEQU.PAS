@@ -209,7 +209,7 @@ BEGIN
   For I:=1 to ParamCount do Begin
    If StrToUpper(ParamStr(I))='/NORD'Then hmc:='N'Else
    If StrToUpper(ParamStr(I))='/SUD'Then hmc:='S' Else
-   If StrToUpper(ParamStr(I))='/SUD'Then TE:=True
+   If StrToUpper(ParamStr(I))='/TE'Then TE:=True
     Else
    Begin
     Case PosField of
