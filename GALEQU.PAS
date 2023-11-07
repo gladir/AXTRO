@@ -252,5 +252,32 @@ BEGIN
    Halt;
   End;
   GalacticEquation;
+ End
+  Else
+ Begin
+  hmc:='N';
+  Write('Longitude galactique (ddd mm ss.sss...) : ');
+  ReadLn(lgd,lgm,lgs);
+  Write('Latitude galactique (dd mm ss.sss...) : ');
+  Readln(btd,btm,bts);
+  Write('Date et TE (jj mm aaaa hh mm ss.ssss) : ');
+  ReadLn(qu,ms,an,hr,mn,sc);
+  If Not IsValidDate(qu,ms,an)Then Begin
+   WriteLn('Format de date invalide !');
+   Halt;
+  End;
+  If Not IsValidTime(hr,mn,sc)Then Begin
+   WriteLn('Format d''heure invalide !');
+   Halt;
+  End;
+  If Not IsValidLongitude(lgd,lgm,lgs)Then Begin
+   WriteLn('Longitude galactique invalide !');
+   Halt;
+  End;
+  If Not IsValidDeclinaison(btd,btm,bts)Then Begin
+   WriteLn('Latitude galactique invalide !');
+   Halt;
+  End;
+  GalacticEquation;
  End;
 END.
