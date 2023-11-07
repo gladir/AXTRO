@@ -16,10 +16,12 @@ Var
  Wrk:Extended;
  Sc,jd:Extended;
  cor,hr,mn,qu,ms,an:LongInt;
- TE,fler,fldt,flsv,flmn:boolean;
+ TE,fler,fldt,flsv,fltv,flmn:boolean;
  hmq,hmc:Char;
  adh,adm,dcd,dcm,lgd,lgm,btd,btm:LongInt;
  ad,dc,lg,bt,ads,dcs,lgs,bts,adg,dcg,tht,theta,dzeta,za:Extended;
+ SourceCSV,TargetTxt:Text;
+ FileNameSourceCSV,FileNameTargetTxt,CurrLine,CurrWord:String;
 
 Function StrToUpper(S:String):String;
 Var
@@ -172,16 +174,56 @@ Begin
  dcm:=trunc(60*frac(dc));
  dcs:=3600*dc;
  dcs:=dcs-60*int(dcs/60);
- WriteLn('Position galactique :');
- WriteLn('Longitude : ',lgd:3,lgm:3,lgs:6:2);
- WriteLn('Latitude  : ',btd:3,btm:3,bts:6:2,hmc:2);
- WriteLn;
- WriteLn('Position ‚quatoriale :');
- WriteLn('Ascension droite : ',adh:3,adm:3,ads:6:2);
- WriteLn('D‚clinaison      : ',dcd:3,dcm:3,dcs:6:2,hmq:2);
-end;
+ If(fltv)Then Begin
+  WriteLn(TargetTxt,'Position galactique :');
+  WriteLn(TargetTxt,'Longitude : ',lgd:3,lgm:3,lgs:6:2);
+  WriteLn(TargetTxt,'Latitude  : ',btd:3,btm:3,bts:6:2,hmc:2);
+  WriteLn(TargetTxt);
+  WriteLn(TargetTxt,'Position ‚quatoriale :');
+  WriteLn(TargetTxt,'Ascension droite : ',adh:3,adm:3,ads:6:2);
+  WriteLn(TargetTxt,'D‚clinaison      : ',dcd:3,dcm:3,dcs:6:2,hmq:2);
+  WriteLn(TargetTxt);
+  WriteLn(TargetTxt);
+ End
+  Else
+ Begin
+  WriteLn('Position galactique :');
+  WriteLn('Longitude : ',lgd:3,lgm:3,lgs:6:2);
+  WriteLn('Latitude  : ',btd:3,btm:3,bts:6:2,hmc:2);
+  WriteLn;
+  WriteLn('Position ‚quatoriale :');
+  WriteLn('Ascension droite : ',adh:3,adm:3,ads:6:2);
+  WriteLn('D‚clinaison      : ',dcd:3,dcm:3,dcs:6:2,hmq:2);
+ End;
+End;
+
+Procedure SetValue(S:String);Begin
+ Case PosField of
+  0:If StrToUpper(S)='/NORD'Then hmc:='N'Else
+    If StrToUpper(S)='/SUD'Then hmc:='S'
+    Else hmc:=' ';
+  1:Val(S,lgd,Err);
+  2:Val(S,lgm,Err);
+  3:Val(S,lgs,Err);
+  4:Val(S,btd,Err);
+  5:Val(S,btm,Err);
+  6:Val(S,bts,Err);
+  7:Val(S,qu,Err);{jj}
+  8:Val(S,ms,Err);{mm}
+  9:Val(S,an,Err);{aaaa}
+  10:Val(S,hr,Err);{hh}
+  11:Val(S,mn,Err);{mm}
+  12:Begin
+   flmn:=False;
+   Val(S,sc,Err);{ss.ssss}
+  End;
+ End;
+End;
 
 BEGIN
+ flsv:=False;
+ fltv:=False;
+ FileNameSourceCSV:='';
  If(ParamStr(1)='/?')or(ParamStr(1)='--help')or(ParamStr(1)='-h')or
    (ParamStr(1)='/h')or(ParamStr(1)='/H')Then Begin
   WriteLn('GALEQU : Cette commande permet de passer des coordonn‚es ',
@@ -190,14 +232,17 @@ BEGIN
   WriteLn('L''‚chelle de temps est le Temps des ph‚m‚rides');
   WriteLn;
   WriteLn('Syntaxe : GALEQU /NORD|/SUD [/TE] ddd mm ss.sss dd mm ss.sss jj mm aaaa hh mm [ss.ssss]');
+  WriteLn('          GALEQU [/TE] source.CSV target.TXT');
   WriteLn;
   WriteLn(' ddd mm ss.sss   Longitude galactique');
   WriteLn(' dd mm ss.sss    Latitude galactique');
   WriteLn(' jj mm aaaa      Date TE');
   WriteLn(' hh mm [ss.ssss] Heure TE');
-  WriteLn(' /NORD           misphŠre Nord');
+  WriteLn(' source.CSV      Contient la source de donn‚es');
+  WriteLn(' target.CSV      Contiendra le r‚sultat');
+  WriteLn(' /NORD           H‚misphŠre Nord');
   WriteLn(' /TE             Echelle de temps des ph‚m‚rides');
-  WriteLn(' /SUD            misphŠre Sud');
+  WriteLn(' /SUD            H‚misphŠre Sud');
  End
   Else
  If ParamCount>0 Then Begin
@@ -209,7 +254,19 @@ BEGIN
   For I:=1 to ParamCount do Begin
    If StrToUpper(ParamStr(I))='/NORD'Then hmc:='N'Else
    If StrToUpper(ParamStr(I))='/SUD'Then hmc:='S' Else
-   If StrToUpper(ParamStr(I))='/TE'Then TE:=True
+   If StrToUpper(ParamStr(I))='/TE'Then TE:=True Else
+   If(Pos('.CSV',StrToUpper(ParamStr(I)))>0)or
+     (Pos('.TXT',StrToUpper(ParamStr(I)))>0)Then Begin
+    If(flsv)Then Begin
+     fltv:=True;
+     FileNameTargetTxt:=ParamStr(I);
+    End
+     Else
+    Begin
+     flsv:=True;
+     FileNameSourceCSV:=ParamStr(I);
+    End;
+   End
     Else
    Begin
     Case PosField of
@@ -235,23 +292,84 @@ BEGIN
     Inc(PosField);
    End;
   End;
-  If Not IsValidDate(qu,ms,an)Then Begin
-   WriteLn('Format de date invalide !');
-   Halt;
+  If(flsv)Then Begin
+   If(fltv)Then Begin
+    {$I-}Assign(TargetTxt,FileNameTargetTxt);
+    Rewrite(TargetTxt);{$I+}
+    If IoResult<>0 Then Begin
+     WriteLn('Impossible de cr‚er un fichier texte :',FileNameTargetTxt);
+     Halt(17);
+    End;
+   End;
+   {$I-}Assign(SourceCSV,FileNameSourceCSV);
+   Reset(SourceCSV);{$I+}
+   If IoResult=0Then Begin
+    While Not EOF(SourceCSV)do Begin
+     ReadLn(SourceCSV,CurrLine);
+     CurrWord:='';PosField:=0;
+     For I:=1 to Length(CurrLine)do Begin
+      If CurrLine[I]=','Then Begin
+       If(CurrWord[1]='"')and(CurrWord[Length(CurrWord)]='"')Then Begin
+        SetValue(Copy(CurrWord,2,Length(CurrWord)-2));
+        Inc(PosField);
+       End
+        Else
+       Begin
+        SetValue(CurrWord);
+        Inc(PosField);
+       End;
+       CurrWord:='';
+      End
+       Else
+      CurrWord:=CurrWord+CurrLine[I];
+     End;
+     If CurrWord<>''Then Begin
+      SetValue(CurrWord);
+     End;
+     If Not IsValidDate(qu,ms,an)Then Begin
+      WriteLn('Format de date invalide !');
+      Halt;
+     End;
+     If Not IsValidTime(hr,mn,sc)Then Begin
+      WriteLn('Format d''heure invalide !');
+      Halt;
+     End;
+     If Not IsValidLongitude(lgd,lgm,lgs)Then Begin
+      WriteLn('Longitude galactique invalide !');
+      Halt;
+     End;
+     If Not IsValidDeclinaison(btd,btm,bts)Then Begin
+      WriteLn('Latitude galactique invalide !');
+      Halt;
+     End;
+     GalacticEquation;
+    End;
+    Close(SourceCSV);
+    If(fltv)Then Close(TargetTxt);
+   End;
+  End
+   Else
+  Begin
+   If Not IsValidDate(qu,ms,an)Then Begin
+    WriteLn('Format de date invalide !');
+    Halt;
+   End;
+   If Not IsValidTime(hr,mn,sc)Then Begin
+    WriteLn('Format d''heure invalide !');
+    Halt;
+   End;
+   If Not IsValidLongitude(lgd,lgm,lgs)Then Begin
+    WriteLn('Longitude galactique invalide !');
+    Halt;
+   End;
+   If Not IsValidDeclinaison(btd,btm,bts)Then Begin
+    WriteLn('Latitude galactique invalide !');
+    Halt;
+   End;
+   GalacticEquation;
+   WriteLn;
+   WriteLn;
   End;
-  If Not IsValidTime(hr,mn,sc)Then Begin
-   WriteLn('Format d''heure invalide !');
-   Halt;
-  End;
-  If Not IsValidLongitude(lgd,lgm,lgs)Then Begin
-   WriteLn('Longitude galactique invalide !');
-   Halt;
-  End;
-  If Not IsValidDeclinaison(btd,btm,bts)Then Begin
-   WriteLn('Latitude galactique invalide !');
-   Halt;
-  End;
-  GalacticEquation;
  End
   Else
  Begin
