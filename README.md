@@ -15,6 +15,10 @@ Voici la liste des différents fichiers proposés dans AXTRO :
 		<td>Cette commande permet d'indiquer la distance entre la planète Terre et un astre.</td>
 	</tr>
 	<tr>
+		<td><b>GALEQU.PAS</b></td>
+		<td>Cette commande permet de passer des coordonnées équatoriales aux coordonnées galactiques.</td>
+	</tr>
+	<tr>
 		<td><b>MOON.PAS</b></td>
 		<td>Cette commande permet d'afficher une phase lunaire dans un mois.</td>
 	</tr>	
@@ -28,7 +32,7 @@ Voici la liste des différents fichiers proposés dans AXTRO :
 	</tr>	
 	<tr>
 		<td><b>PLANET.PAS</b></td>
-		<td>Cette commande permet d'afficher les planètes du système solaire.</td>
+		<td>Cette commande permet d'afficher la liste des planètes du système solaire.</td>
 	</tr>	
 </table>
 
