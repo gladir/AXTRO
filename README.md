@@ -11,6 +11,10 @@ Voici la liste des différents fichiers proposés dans AXTRO :
 		<th>Description</th>	
 	</tr>
 	<tr>
+    		<td><b>COSMIC.PAS</b></td>
+    		<td>Cette commande permet de générer du texte aléatoire d'astronomie (Cosmic Ipsum).</td>
+  	</tr>
+	<tr>
 		<td><b>DISTANCE.PAS</b></td>
 		<td>Cette commande permet d'indiquer la distance entre la planète Terre et un astre.</td>
 	</tr>
