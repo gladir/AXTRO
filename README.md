@@ -23,6 +23,10 @@ Voici la liste des différents fichiers proposés dans AXTRO :
 		<td>Cette commande permet de passer des coordonnées équatoriales aux coordonnées galactiques.</td>
 	</tr>
 	<tr>
+		<td><b>GRAVIT.PAS</b></td>
+		<td>Cette commande permet de calculer la force de gravitation entre deux objets célestes.</td>
+	</tr>
+	<tr>
 		<td><b>MOON.PAS</b></td>
 		<td>Cette commande permet d'afficher une phase lunaire dans un mois.</td>
 	</tr>	
