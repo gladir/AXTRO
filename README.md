@@ -54,6 +54,11 @@ Par exemple, si vous voulez compiler MOON.PAS, vous devrez tapez la commande sui
 
 <pre><b>fpc</b> MOON.PAS</pre>
 
+<h3>Remarque</h3>
+<ul>
+		<li>La version 1.1 de la commande DISTANCE, ajoute le paramètre --version et corrige les distances terre-astre des astre du système solaire.</li>
+</ul>
+
 <h2>Licence</h2>
 <ul>
  <li>Le code source est publié sous la licence <a href="https://github.com/gladir/AXTRO/blob/main/LICENSE">MIT</a>.</li>
