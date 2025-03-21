@@ -1,6 +1,10 @@
 # AXTRO
 Liste de commandes sur l'astronomie écrit en Pascal.
 
+Apercu de la commande «SIMUPLAN /ORBIT /NAME» :
+
+![image](https://github.com/user-attachments/assets/ebd44129-3d38-44d7-b7d1-fea5e3d123cb)
+
 <h2>Liste des fichiers</h2>
 
 Voici la liste des différents fichiers proposés dans AXTRO :
@@ -42,6 +46,10 @@ Voici la liste des différents fichiers proposés dans AXTRO :
 		<td><b>PLANET.PAS</b></td>
 		<td>Cette commande permet d'afficher la liste des planètes du système solaire.</td>
 	</tr>	
+	<tr>
+		<td><b>SIMUPLAN.PAS</b></td>
+		<td>Cette commande permet d'effectuer une simulation des astres (planètes, lunes, astéroïde, comète,...) du système solaire.</td>
+	</tr>
 </table>
 
 <h2>Compilation</h2>
