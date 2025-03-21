@@ -1,5 +1,6 @@
 # AXTRO
-Liste de commandes sur l'astronomie écrit en Pascal.
+
+Le projet Axtro est une suite de commande permettant de simplifier d'effectuer des recherches et des simulations en astronomie. Liste de commandes sur l'astronomie écrit en Pascal (compatible avec Turbo Pascal ou Free Pascal).
 
 Apercu de la commande «SIMUPLAN /ORBIT /NAME» :
 
