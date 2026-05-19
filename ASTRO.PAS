@@ -4365,10 +4365,10 @@ Var
   Cy:=(R.Y1+R.Y2) Div 2;
   SetColor(CLR_FG);
   Case Dir Of
-   0: For J:=0 To 4 Do Line(Cx-J,Cy+2-J,Cx+J,Cy+2-J);      { haut }
-   1: For J:=0 To 4 Do Line(Cx-J,Cy-2+J,Cx+J,Cy-2+J);      { bas  }
-   2: For J:=0 To 4 Do Line(Cx+2-J,Cy-J,Cx+2-J,Cy+J);      { gauche }
-   3: For J:=0 To 4 Do Line(Cx-2+J,Cy-J,Cx-2+J,Cy+J);      { droite }
+   0: For J:=0 To 4 Do Line(Cx-J,Cy-2+J,Cx+J,Cy-2+J);      { haut }
+   1: For J:=0 To 4 Do Line(Cx-J,Cy+2-J,Cx+J,Cy+2-J);      { bas  }
+   2: For J:=0 To 4 Do Line(Cx-2+J,Cy-J,Cx-2+J,Cy+J);      { gauche }
+   3: For J:=0 To 4 Do Line(Cx+2-J,Cy-J,Cx+2-J,Cy+J);      { droite }
   End;
  End;
 
@@ -18268,6 +18268,8 @@ Begin
    #68: Begin                                         { F10 - ouvrir 1er menu }
     MenuActive:=True; ActiveMenu:=0; ActiveMenuItem:=-1; NeedRedraw:=True;
    End;
+   #107,                                               { Alt+F4 - Quitter }
+   #45: ProgramRunning:=False;                          { Alt+X - Quitter }
    #75: Begin                                         { Fleche gauche }
     If MenuActive Then Begin
      ActiveMenu:=ActiveMenu-1;
