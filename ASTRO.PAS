@@ -4306,46 +4306,167 @@ Begin
  FmtS:=R;
 End;
 
+{ Forward pour utilisation depuis ResultsShow (definis plus bas). }
+Function  InputString(Const Title,Prompt:String; Var S:String;
+                      MaxLen:Integer):Boolean; Forward;
+Procedure ShowMessage(Const Title,Msg:String); Forward;
+
+{ Sauvegarde le contenu accumule dans un fichier texte. }
+Procedure ResultsSaveToFile;
+Var FN:String;
+    F:Text;
+    I:Integer;
+Begin
+ FN:='RESULTS.TXT';
+ If Not InputString('Sauvegarder les resultats',
+                    'Nom du fichier texte :',FN,60) Then Exit;
+ If FN='' Then Exit;
+ {$I-} Assign(F,FN); Rewrite(F); {$I+}
+ If IOResult<>0 Then Begin
+  ShowMessage('Erreur','Impossible de creer le fichier "'+FN+'".');
+  Exit;
+ End;
+ Writeln(F,ResultTitle);
+ Writeln(F,'');
+ For I:=0 To ResultCount-1 Do
+  Writeln(F,ResultLines[I]);
+ {$I-} Close(F); {$I+}
+ If IOResult<>0 Then Begin
+  ShowMessage('Erreur','Erreur d''ecriture sur "'+FN+'".');
+  Exit;
+ End;
+ ShowMessage('Sauvegarde',FmtI(ResultCount,1)+
+             ' ligne(s) enregistree(s) dans "'+FN+'".');
+End;
+
 { Visionneuse scrollable du tampon de resultats. }
 
 Procedure ResultsShow;
 Const
  LINES_PER_PAGE = 22;
+ SB_W           = 14;       { largeur des scrollbars }
+ CHAR_W         = 8;
+ LINE_H         = 9;
 Var
- DlgR,BtnClose:TRect;
- Top,I,Y:Integer;
+ DlgR,BtnClose,BtnSave,TextR:TRect;
+ VUp,VDn,HLf,HRt:TRect;
+ Top,HOff,I,Y:Integer;
+ MaxLen,VisCols:Integer;
+ ThumbY,ThumbX,ThumbH,ThumbW:Integer;
  K:Char;
  Done:Boolean;
  MX,MY,MB,OldMB:LongInt;
+ S:String;
+
+ Procedure DrawArrow(R:TRect; Dir:Integer);
+ Var Cx,Cy,J:Integer;
+ Begin
+  Cx:=(R.X1+R.X2) Div 2;
+  Cy:=(R.Y1+R.Y2) Div 2;
+  SetColor(CLR_FG);
+  Case Dir Of
+   0: For J:=0 To 4 Do Line(Cx-J,Cy+2-J,Cx+J,Cy+2-J);      { haut }
+   1: For J:=0 To 4 Do Line(Cx-J,Cy-2+J,Cx+J,Cy-2+J);      { bas  }
+   2: For J:=0 To 4 Do Line(Cx+2-J,Cy-J,Cx+2-J,Cy+J);      { gauche }
+   3: For J:=0 To 4 Do Line(Cx-2+J,Cy-J,Cx-2+J,Cy+J);      { droite }
+  End;
+ End;
+
+ Procedure DrawScrollBtn(R:TRect; Dir:Integer);
+ Begin
+  SetFillStyle(1,7);
+  Bar(R.X1,R.Y1,R.X2,R.Y2);
+  SetColor(CLR_DLG_FRAME);
+  Rectangle(R.X1,R.Y1,R.X2,R.Y2);
+  DrawArrow(R,Dir);
+ End;
+
 Begin
  RFlush;
  DlgR:=MkRect(20,30,SCREEN_WIDTH-20,SCREEN_HEIGHT-50);
  BtnClose:=MkRect(DlgR.X2-90,DlgR.Y2-30,DlgR.X2-10,DlgR.Y2-8);
- Top:=0;
+ BtnSave :=MkRect(DlgR.X2-220,DlgR.Y2-30,DlgR.X2-100,DlgR.Y2-8);
+ { Zone de texte interne (excluant scrollbars + status). }
+ TextR.X1:=DlgR.X1+8;
+ TextR.Y1:=DlgR.Y1+24;
+ TextR.X2:=DlgR.X2-8-SB_W;
+ TextR.Y2:=DlgR.Y2-50-SB_W;
+ { Boutons fleches }
+ VUp:=MkRect(TextR.X2+1,TextR.Y1,TextR.X2+SB_W,TextR.Y1+SB_W);
+ VDn:=MkRect(TextR.X2+1,TextR.Y2-SB_W,TextR.X2+SB_W,TextR.Y2);
+ HLf:=MkRect(TextR.X1,TextR.Y2+1,TextR.X1+SB_W,TextR.Y2+SB_W);
+ HRt:=MkRect(TextR.X2-SB_W,TextR.Y2+1,TextR.X2,TextR.Y2+SB_W);
+ { Largeur max des lignes pour scroll horizontal. }
+ MaxLen:=1;
+ For I:=0 To ResultCount-1 Do
+  If Length(ResultLines[I])>MaxLen Then MaxLen:=Length(ResultLines[I]);
+ VisCols:=(TextR.X2-TextR.X1-4) Div CHAR_W;
+ If VisCols<1 Then VisCols:=1;
+ Top:=0; HOff:=0;
  Done:=False;
  OldMB:=0;
  Repeat
   HideMouse;
   DrawDialogBox(DlgR,ResultTitle);
-  { zone de texte }
+  { Cadre + fond zone texte }
   SetFillStyle(1,15);
-  Bar(DlgR.X1+8,DlgR.Y1+24,DlgR.X2-8,DlgR.Y2-40);
+  Bar(TextR.X1,TextR.Y1,TextR.X2,TextR.Y2);
   SetColor(CLR_DLG_FRAME);
-  Rectangle(DlgR.X1+8,DlgR.Y1+24,DlgR.X2-8,DlgR.Y2-40);
-  Y:=DlgR.Y1+28;
+  Rectangle(TextR.X1,TextR.Y1,TextR.X2,TextR.Y2);
+  { Lignes visibles (avec offset horizontal) }
+  Y:=TextR.Y1+4;
   For I:=Top To Top+LINES_PER_PAGE-1 Do Begin
    If I<ResultCount Then Begin
     SetColor(CLR_FG);
-    OutTextXY(DlgR.X1+14,Y,ResultLines[I]);
+    If HOff<Length(ResultLines[I]) Then
+     S:=Copy(ResultLines[I],HOff+1,VisCols)
+    Else
+     S:='';
+    OutTextXY(TextR.X1+4,Y,S);
    End;
-   Y:=Y+9;
+   Y:=Y+LINE_H;
   End;
-  { indicateurs scroll }
+  { Scrollbar verticale }
+  SetFillStyle(1,8);
+  Bar(TextR.X2+1,VUp.Y2+1,TextR.X2+SB_W,VDn.Y1-1);
+  DrawScrollBtn(VUp,0);
+  DrawScrollBtn(VDn,1);
+  If ResultCount>LINES_PER_PAGE Then Begin
+   ThumbH:=((VDn.Y1-VUp.Y2-2)*LINES_PER_PAGE) Div ResultCount;
+   If ThumbH<6 Then ThumbH:=6;
+   ThumbY:=VUp.Y2+1 + (LongInt(VDn.Y1-VUp.Y2-2-ThumbH)*Top) Div
+                       (ResultCount-LINES_PER_PAGE);
+   SetFillStyle(1,7);
+   Bar(TextR.X2+2,ThumbY,TextR.X2+SB_W-1,ThumbY+ThumbH);
+   SetColor(CLR_DLG_FRAME);
+   Rectangle(TextR.X2+2,ThumbY,TextR.X2+SB_W-1,ThumbY+ThumbH);
+  End;
+  { Scrollbar horizontale }
+  SetFillStyle(1,8);
+  Bar(HLf.X2+1,TextR.Y2+1,HRt.X1-1,TextR.Y2+SB_W);
+  DrawScrollBtn(HLf,2);
+  DrawScrollBtn(HRt,3);
+  If MaxLen>VisCols Then Begin
+   ThumbW:=((HRt.X1-HLf.X2-2)*VisCols) Div MaxLen;
+   If ThumbW<6 Then ThumbW:=6;
+   ThumbX:=HLf.X2+1 + (LongInt(HRt.X1-HLf.X2-2-ThumbW)*HOff) Div
+                       (MaxLen-VisCols);
+   SetFillStyle(1,7);
+   Bar(ThumbX,TextR.Y2+2,ThumbX+ThumbW,TextR.Y2+SB_W-1);
+   SetColor(CLR_DLG_FRAME);
+   Rectangle(ThumbX,TextR.Y2+2,ThumbX+ThumbW,TextR.Y2+SB_W-1);
+  End;
+  { Coin entre les 2 scrollbars }
+  SetFillStyle(1,8);
+  Bar(TextR.X2+1,TextR.Y2+1,TextR.X2+SB_W,TextR.Y2+SB_W);
+  { Indicateur + boutons }
   SetColor(CLR_FG);
-  OutTextXY(DlgR.X1+8,DlgR.Y2-50,
+  OutTextXY(DlgR.X1+8,DlgR.Y2-46,
    'Lignes '+FmtI(Top+1,1)+'..'+FmtI(Top+LINES_PER_PAGE,1)+
-   ' / '+FmtI(ResultCount,1)+
-   '  (PgUp/PgDn/Home/End/Esc)');
+   '/'+FmtI(ResultCount,1)+
+   '   Col '+FmtI(HOff+1,1)+'..'+FmtI(HOff+VisCols,1)+'/'+FmtI(MaxLen,1)+
+   '   (PgUp/PgDn/Home/End/<-/->/Esc)');
+  DrawButton(BtnSave,'Sauvegarder',True);
   DrawButton(BtnClose,'Fermer',True);
   ShowMouse;
   { Attente entree clavier ou clic }
@@ -4355,20 +4476,22 @@ Begin
     If K=#0 Then Begin
      K:=ReadKey;
      Case K Of
-      #72: If Top>0 Then Dec(Top);            { Up   }
-      #80: If Top+LINES_PER_PAGE<ResultCount Then Inc(Top); { Down }
-      #73: Begin                               { PgUp }
+      #72: If Top>0 Then Dec(Top);                          { Up    }
+      #80: If Top+LINES_PER_PAGE<ResultCount Then Inc(Top); { Down  }
+      #75: If HOff>0 Then Dec(HOff);                        { Left  }
+      #77: If HOff+VisCols<MaxLen Then Inc(HOff);           { Right }
+      #73: Begin                                             { PgUp }
             Top:=Top-LINES_PER_PAGE;
             If Top<0 Then Top:=0;
            End;
-      #81: Begin                               { PgDn }
+      #81: Begin                                             { PgDn }
             Top:=Top+LINES_PER_PAGE;
             If Top>ResultCount-LINES_PER_PAGE Then
              Top:=ResultCount-LINES_PER_PAGE;
             If Top<0 Then Top:=0;
            End;
-      #71: Top:=0;                             { Home }
-      #79: Begin                               { End  }
+      #71: Begin Top:=0; HOff:=0; End;                      { Home }
+      #79: Begin                                             { End  }
             Top:=ResultCount-LINES_PER_PAGE;
             If Top<0 Then Top:=0;
            End;
@@ -4378,13 +4501,30 @@ Begin
     Else Begin
      If K=#27 Then Done:=True;
      If (K=#13) Or (K=' ') Then Done:=True;
+     If (K='s') Or (K='S') Then ResultsSaveToFile;
      Break;
     End;
    End;
    If HasMouse Then Begin
     ReadMouse(MX,MY,MB);
     If (MB=1) And (OldMB=0) Then Begin
-     If PtInRect(MX,MY,BtnClose) Then Done:=True;
+     If PtInRect(MX,MY,BtnClose) Then Done:=True
+     Else If PtInRect(MX,MY,BtnSave) Then Begin
+      ResultsSaveToFile;
+      Break;
+     End
+     Else If PtInRect(MX,MY,VUp) Then Begin
+      If Top>0 Then Dec(Top); Break;
+     End
+     Else If PtInRect(MX,MY,VDn) Then Begin
+      If Top+LINES_PER_PAGE<ResultCount Then Inc(Top); Break;
+     End
+     Else If PtInRect(MX,MY,HLf) Then Begin
+      If HOff>0 Then Dec(HOff); Break;
+     End
+     Else If PtInRect(MX,MY,HRt) Then Begin
+      If HOff+VisCols<MaxLen Then Inc(HOff); Break;
+     End;
     End;
     OldMB:=MB;
    End;
