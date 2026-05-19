@@ -18262,12 +18262,33 @@ Begin
  End;
 End;
 
+Procedure HandleMouseMove(X,Y:LongInt);
+{ Suivi du curseur souris hors clic :
+  - menu ouvert + curseur sur un autre menu bar => bascule de menu
+  - menu ouvert + curseur sur un item de la popup => highlight item }
+Var Idx:Integer;
+Begin
+ If Not MenuActive Then Exit;
+ Idx:=MenuBarHitTest(X,Y);
+ If (Idx>=0) And (Idx<>ActiveMenu) Then Begin
+  ActiveMenu:=Idx; ActiveMenuItem:=-1; NeedRedraw:=True;
+  Exit;
+ End;
+ Idx:=MenuItemHitTest(ActiveMenu,X,Y);
+ If (Idx>=0) And (Idx<>ActiveMenuItem) And
+    (Not Menus[ActiveMenu].Items[Idx].Separator) Then Begin
+  ActiveMenuItem:=Idx; NeedRedraw:=True;
+ End;
+End;
+
 Procedure MainLoop;
 Var K:Char;
+    OldX,OldY:LongInt;
 Begin
  ProgramRunning:=True;
  NeedRedraw:=True;
  OldMouseBtn:=0;
+ OldX:=-1; OldY:=-1;
  While ProgramRunning Do Begin
   If NeedRedraw Then Begin
    RedrawAll;
@@ -18284,6 +18305,10 @@ Begin
   End;
   If HasMouse Then Begin
    ReadMouse(MouseX,MouseY,MouseBtn);
+   If (MouseX<>OldX) Or (MouseY<>OldY) Then Begin
+    HandleMouseMove(MouseX,MouseY);
+    OldX:=MouseX; OldY:=MouseY;
+   End;
    If (MouseBtn=1) And (OldMouseBtn=0) Then
     HandleMouseClick(MouseX,MouseY);
    OldMouseBtn:=MouseBtn;
