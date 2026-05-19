@@ -173,8 +173,9 @@ Const
  STATUSBAR_HEIGHT= 20;
  NUM_MENUS       = 7;
  MAX_MENU_ITEMS  = 18;
- NUM_TOOLS       = 1;
+ NUM_TOOLS       = 2;
  TI_LUNAR        = 0;
+ TI_SOLAR        = 1;
 
  { Couleurs (palette EGA/VGA 16) }
  CLR_BG          = 7;   { LightGray }
@@ -5004,6 +5005,7 @@ Const
  ACT_CLEAR     = 90;
  ACT_SHOW      = 91;
  ACT_LUNCAL    = 92;  { calendrier lunaire mensuel }
+ ACT_SOLSYS    = 93;  { systeme solaire schematique }
 
 Procedure InitMenus;
 Var I:Integer;
@@ -5145,6 +5147,30 @@ Begin
  FillEllipse(X+12,Y+9,5,5);
 End;
 
+{ Icone de systeme solaire : soleil central + orbites + planete (20x20). }
+Procedure DrawSolarIcon(X,Y:Integer);
+Begin
+ SetFillStyle(1,Black);
+ Bar(X+2,Y+2,X+18,Y+18);
+ SetColor(LightGray);
+ Rectangle(X+2,Y+2,X+18,Y+18);
+ { 2 orbites }
+ SetColor(DarkGray);
+ Circle(X+10,Y+10,4);
+ Circle(X+10,Y+10,7);
+ { Soleil }
+ SetFillStyle(1,Yellow);
+ SetColor(Yellow);
+ FillEllipse(X+10,Y+10,2,2);
+ { Planete bleue sur orbite interne }
+ PutPixel(X+14,Y+10,LightBlue);
+ PutPixel(X+15,Y+10,LightBlue);
+ PutPixel(X+14,Y+11,LightBlue);
+ { Planete rouge sur orbite externe }
+ PutPixel(X+10,Y+3,LightRed);
+ PutPixel(X+11,Y+3,LightRed);
+End;
+
 Procedure DrawToolButton(I:Integer);
 Var R:TRect;
 Begin
@@ -5157,6 +5183,7 @@ Begin
  Line(R.X1,R.Y2,R.X2,R.Y2); Line(R.X2,R.Y1,R.X2,R.Y2);
  Case ToolButtons[I].IconId Of
   TI_LUNAR: DrawLunarIcon(R.X1,R.Y1);
+  TI_SOLAR: DrawSolarIcon(R.X1,R.Y1);
  End;
 End;
 
@@ -5179,6 +5206,10 @@ Begin
  ToolButtons[TI_LUNAR].Action:=ACT_LUNCAL;
  ToolButtons[TI_LUNAR].IconId:=TI_LUNAR;
  ToolButtons[TI_LUNAR].Hint:='Calendrier lunaire';
+ ToolButtons[TI_SOLAR].R:=MkRect(28,BtnY,28+20,BtnY+20);
+ ToolButtons[TI_SOLAR].Action:=ACT_SOLSYS;
+ ToolButtons[TI_SOLAR].IconId:=TI_SOLAR;
+ ToolButtons[TI_SOLAR].Hint:='Systeme solaire';
 End;
 
 Function ToolbarHitTest(X,Y:LongInt):Integer;
@@ -5313,6 +5344,7 @@ Procedure DoNepPhys; Forward;
 Procedure DoPlutPhys;Forward;
 Procedure DoAbout;   Forward;
 Procedure DoLunarCalendar; Forward;
+Procedure DoSolarSystem;   Forward;
 
 { -------------------------------------------------------------------------- }
 { DoCal2JD : Conversion date civile -> jour julien (Jrjulien original)      }
@@ -15527,6 +15559,186 @@ Begin
  Until Done;
 End;
 
+{ -------------------------------------------------------------------------- }
+{ DoSolarSystem : Vue schematique heliocentrique des planetes et lunes.      }
+{ Periodes siderales et longitudes moyennes a J2000 reelles ; positions      }
+{ projetees sur orbites circulaires coplanaires (vue par le pole nord        }
+{ ecliptique). Reference J2000.0 (JD 2451545.0).                             }
+{ -------------------------------------------------------------------------- }
+Procedure DoSolarSystem;
+Const
+ NB_SYS = 15;
+Type
+ TSysBody = Record
+  Nom: String[10];
+  Per: Extended;     { periode siderale en jours }
+  L0 : Extended;     { longitude moyenne a J2000 (deg) }
+  Dst: Integer;      { rayon orbital en pixels (echelle artistique) }
+  Ryn: Integer;      { rayon de dessin de l'astre }
+  Col: Integer;
+  Cnt: Integer;      { 0=Soleil ; sinon index 1..NB_SYS du corps central }
+ End;
+Const
+ SBody:Array[1..NB_SYS] Of TSysBody = (
+  (Nom:'Soleil';   Per:1.0;       L0:0.0;     Dst:0;   Ryn:12; Col:14; Cnt:0),
+  (Nom:'Mercure';  Per:87.969;    L0:252.25;  Dst:32;  Ryn:3;  Col:7;  Cnt:1),
+  (Nom:'Venus';    Per:224.701;   L0:181.98;  Dst:55;  Ryn:5;  Col:12; Cnt:1),
+  (Nom:'Terre';    Per:365.256;   L0:100.47;  Dst:80;  Ryn:5;  Col:1;  Cnt:1),
+  (Nom:'Lune';     Per:27.3217;   L0:218.32;  Dst:12;  Ryn:2;  Col:15; Cnt:4),
+  (Nom:'Mars';     Per:686.971;   L0:355.45;  Dst:108; Ryn:4;  Col:12; Cnt:1),
+  (Nom:'Phobos';   Per:0.31891;   L0:0.0;     Dst:7;   Ryn:1;  Col:7;  Cnt:6),
+  (Nom:'Deimos';   Per:1.26244;   L0:90.0;    Dst:11;  Ryn:1;  Col:7;  Cnt:6),
+  (Nom:'Ceres';    Per:1681.6;    L0:95.99;   Dst:130; Ryn:2;  Col:8;  Cnt:1),
+  (Nom:'Pallas';   Per:1686.0;    L0:174.0;   Dst:135; Ryn:2;  Col:7;  Cnt:1),
+  (Nom:'Jupiter';  Per:4332.589;  L0:34.40;   Dst:160; Ryn:8;  Col:6;  Cnt:1),
+  (Nom:'Saturne';  Per:10759.22;  L0:49.94;   Dst:188; Ryn:7;  Col:13; Cnt:1),
+  (Nom:'Uranus';   Per:30688.5;   L0:313.23;  Dst:212; Ryn:6;  Col:11; Cnt:1),
+  (Nom:'Neptune';  Per:60182.0;   L0:304.88;  Dst:235; Ryn:6;  Col:1;  Cnt:1),
+  (Nom:'Pluton';   Per:90560.0;   L0:238.93;  Dst:253; Ryn:3;  Col:8;  Cnt:1)
+ );
+Var
+ DlgR,BtnHm,BtnHp,BtnDm,BtnDp,BtnClose:TRect;
+ Yr,Mn0,Dy,Dw:Word;
+ Hh,Mm,Ss,Hu:Word;
+ cJD,T:Extended;
+ BX,BY:Array[1..NB_SYS] Of Integer;
+ CX,CY:Integer;
+ VX1,VY1,VX2,VY2:Integer;
+ I:Integer;
+ Ang:Extended;
+ Done,NeedDraw:Boolean;
+ K:Char;
+ MX,MY,MB,OldMB:LongInt;
+ sQu,sMs,sAn,sHour,sMin:LongInt;
+ sSc:Extended;
+ InfoS:String;
+
+Begin
+ GetDate(Yr,Mn0,Dy,Dw);
+ GetTime(Hh,Mm,Ss,Hu);
+ cJD := jj(Dy,Mn0,Yr,Hh,Mm,Ss);
+ DlgR    :=MkRect(8,30,SCREEN_WIDTH-8,SCREEN_HEIGHT-30);
+ BtnHm   :=MkRect(DlgR.X1+8,  DlgR.Y2-30,DlgR.X1+120,DlgR.Y2-8);
+ BtnHp   :=MkRect(DlgR.X1+126,DlgR.Y2-30,DlgR.X1+238,DlgR.Y2-8);
+ BtnDm   :=MkRect(DlgR.X1+248,DlgR.Y2-30,DlgR.X1+352,DlgR.Y2-8);
+ BtnDp   :=MkRect(DlgR.X1+358,DlgR.Y2-30,DlgR.X1+462,DlgR.Y2-8);
+ BtnClose:=MkRect(DlgR.X2-72, DlgR.Y2-30,DlgR.X2-8, DlgR.Y2-8);
+ CX:=(DlgR.X1+DlgR.X2) Div 2;
+ CY:=(DlgR.Y1+DlgR.Y2) Div 2 - 14;
+ Done:=False; OldMB:=0; NeedDraw:=True;
+ Repeat
+  If NeedDraw Then Begin
+   HideMouse;
+   { Cadre de la boite }
+   FillRect(DlgR,CLR_DLG_BG);
+   FrameRect(DlgR,CLR_DLG_FRAME);
+   { Bandeau de titre }
+   SetFillStyle(1,CLR_TITLE_BG);
+   Bar(DlgR.X1+1,DlgR.Y1+1,DlgR.X2-1,DlgR.Y1+18);
+   SetColor(CLR_TITLE_FG);
+   OutTextXY(DlgR.X1+8,DlgR.Y1+5,'Systeme solaire - vue heliocentrique');
+   { Fond noir pour la zone de dessin }
+   VX1:=DlgR.X1+4;  VY1:=DlgR.Y1+22;
+   VX2:=DlgR.X2-4;  VY2:=DlgR.Y2-44;
+   SetFillStyle(1,Black);
+   Bar(VX1,VY1,VX2,VY2);
+   { Calcul des positions (coordonnees absolues) }
+   T:=cJD-2451545.0;
+   BX[1]:=CX; BY[1]:=CY;
+   For I:=2 To NB_SYS Do Begin
+    Ang:=(SBody[I].L0 + 360.0*T/SBody[I].Per)*Pi/180.0;
+    BX[I]:=BX[SBody[I].Cnt]+Round(SBody[I].Dst*Cos(Ang));
+    BY[I]:=BY[SBody[I].Cnt]-Round(SBody[I].Dst*Sin(Ang));
+   End;
+   { Clipping a la zone noire pour orbites et astres }
+   SetViewPort(VX1,VY1,VX2,VY2,ClipOn);
+   { Orbites en pointilles : autour du Soleil d'abord }
+   SetLineStyle(1,0,1);          { DottedLn, NormWidth }
+   SetColor(DarkGray);
+   For I:=2 To NB_SYS Do
+    If SBody[I].Cnt=1 Then
+     Circle(CX-VX1,CY-VY1,SBody[I].Dst);
+   { Orbites des lunes autour de leur planete }
+   For I:=2 To NB_SYS Do
+    If SBody[I].Cnt<>1 Then
+     Circle(BX[SBody[I].Cnt]-VX1,BY[SBody[I].Cnt]-VY1,SBody[I].Dst);
+   SetLineStyle(0,0,1);          { SolidLn }
+   { Dessin des astres }
+   For I:=1 To NB_SYS Do Begin
+    SetFillStyle(1,SBody[I].Col);
+    SetColor(SBody[I].Col);
+    FillEllipse(BX[I]-VX1,BY[I]-VY1,SBody[I].Ryn,SBody[I].Ryn);
+   End;
+   { Anneaux de Saturne et Uranus }
+   For I:=1 To NB_SYS Do
+    If (SBody[I].Nom='Saturne') Or (SBody[I].Nom='Uranus') Then Begin
+     SetColor(White);
+     Ellipse(BX[I]-VX1,BY[I]-VY1,0,360,SBody[I].Ryn+4,SBody[I].Ryn+1);
+    End;
+   { Etiquettes : nom des astres en blanc, a droite du disque }
+   SetColor(White);
+   For I:=1 To NB_SYS Do
+    If (BX[I]>=VX1) And (BX[I]<=VX2-40) And
+       (BY[I]>=VY1+3) And (BY[I]<=VY2-5) Then
+     OutTextXY(BX[I]-VX1+SBody[I].Ryn+2,BY[I]-VY1-3,SBody[I].Nom);
+   { Retour au viewport plein ecran pour le reste de la boite }
+   SetViewPort(0,0,GetMaxX,GetMaxY,ClipOff);
+   { Information temporelle au bas du cadre }
+   InfoS:='Date : '+FmtI(Dy,2)+' '+mth[Mn0]+' '+FmtI(Yr,4)+
+          '   Heure TU : '+FmtI(Hh,2)+'h'+FmtI(Mm,2)+'m'+
+          '   JD = '+FmtF(cJD,14,4);
+   SetColor(CLR_FG);
+   OutTextXY(DlgR.X1+8,DlgR.Y2-42,InfoS);
+   DrawButton(BtnHm,   '< Heure',     False);
+   DrawButton(BtnHp,   'Heure >',     False);
+   DrawButton(BtnDm,   '<< Jour',     False);
+   DrawButton(BtnDp,   'Jour >>',     False);
+   DrawButton(BtnClose,'Fermer',      True);
+   ShowMouse;
+   NeedDraw:=False;
+  End;
+  If KeyPressed Then Begin
+   K:=ReadKey;
+   If K=#0 Then Begin
+    K:=ReadKey;
+    Case K Of
+     #75: Begin cJD:=cJD-1.0/24.0; NeedDraw:=True; End;  { Gauche : -1h }
+     #77: Begin cJD:=cJD+1.0/24.0; NeedDraw:=True; End;  { Droite : +1h }
+     #73: Begin cJD:=cJD-1.0;      NeedDraw:=True; End;  { PgUp   : -1j }
+     #81: Begin cJD:=cJD+1.0;      NeedDraw:=True; End;  { PgDn   : +1j }
+     #71: Begin                                            { Home : aujourd'hui }
+      GetDate(Yr,Mn0,Dy,Dw); GetTime(Hh,Mm,Ss,Hu);
+      cJD:=jj(Dy,Mn0,Yr,Hh,Mm,Ss);
+      NeedDraw:=True;
+     End;
+     #107: Done:=True;                                     { Alt+F4 }
+    End;
+   End
+   Else Begin
+    If K=#27 Then Done:=True;
+    If (K=#13) Or (K=' ') Then Done:=True;
+   End;
+  End;
+  If HasMouse Then Begin
+   ReadMouse(MX,MY,MB);
+   If (MB=1) And (OldMB=0) Then Begin
+    If PtInRect(MX,MY,BtnClose) Then Done:=True
+    Else If PtInRect(MX,MY,BtnHm) Then Begin cJD:=cJD-1.0/24.0; NeedDraw:=True; End
+    Else If PtInRect(MX,MY,BtnHp) Then Begin cJD:=cJD+1.0/24.0; NeedDraw:=True; End
+    Else If PtInRect(MX,MY,BtnDm) Then Begin cJD:=cJD-1.0;      NeedDraw:=True; End
+    Else If PtInRect(MX,MY,BtnDp) Then Begin cJD:=cJD+1.0;      NeedDraw:=True; End;
+   End;
+   OldMB:=MB;
+  End;
+  { Apres ajustement du JD, recalculer la date civile affichee }
+  If NeedDraw Then Begin
+   cal(cJD,sQu,sMs,sAn,sHour,sMin,sSc);
+   Dy:=sQu; Mn0:=sMs; Yr:=sAn; Hh:=sHour; Mm:=sMin;
+  End;
+  Delay(15);
+ Until Done;
+End;
+
 Procedure DoLeCouMer;
 { Lever, coucher, passage au meridien d'un astre quelconque (AD+Dec).
   Source verbatim : BIBLIL.PAS, procedure LeCouMer, branche "autres astres".
@@ -18595,6 +18807,7 @@ Begin
   ACT_NEPPHYS:    DoNepPhys;
   ACT_PLUTPHYS:   DoPlutPhys;
   ACT_LUNCAL:     DoLunarCalendar;
+  ACT_SOLSYS:     DoSolarSystem;
  End;
  NeedRedraw:=True;
 End;
