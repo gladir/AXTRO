@@ -7,11 +7,6 @@
                 ASTRO (calculs ephemerides, calendriers, coordonnees celestes,
                 phenomenes astronomiques) avec menus deroulants et dialogues.
 
-  Sources originales : C:\SOURCE\ASTRO\*.PAS (Bibli0/u/c/e/l/o/p, Comet,
-  Geograph, Inter, Phs1..4, Sat1..2, Stnp, Tel, Jup, Ura, Sat, Lune0..2).
-
-  Inspirations GUI (menus + dialogues) : C:\SOURCE\GITHUB\QCHIMIE\PYMOL.PAS.
-
   NOTE : la routine InitializeGraphics et les routines de souris sont
   preservees telles que demande par l'utilisateur.
 
@@ -173,10 +168,11 @@ Const
  STATUSBAR_HEIGHT= 20;
  NUM_MENUS       = 7;
  MAX_MENU_ITEMS  = 18;
- NUM_TOOLS       = 3;
+ NUM_TOOLS       = 4;
  TI_LUNAR        = 0;
  TI_SOLAR        = 1;
  TI_COMET        = 2;
+ TI_GALAXY       = 3;
 
  { Couleurs (palette EGA/VGA 16) }
  CLR_BG          = 7;   { LightGray }
@@ -5008,6 +5004,7 @@ Const
  ACT_LUNCAL    = 92;  { calendrier lunaire mensuel }
  ACT_SOLSYS    = 93;  { systeme solaire schematique }
  ACT_COMETV    = 94;  { visualisation des cometes }
+ ACT_GALAXY    = 95;  { visualisation de la Voie Lactee }
 
 Procedure InitMenus;
 Var I:Integer;
@@ -5197,6 +5194,29 @@ Begin
  PutPixel(X+8,Y+8,White);
 End;
 
+{ Icone de galaxie : bulbe central + 2 bras spiraux schematiques (20x20). }
+Procedure DrawGalaxyIcon(X,Y:Integer);
+Begin
+ SetFillStyle(1,Black);
+ Bar(X+2,Y+2,X+18,Y+18);
+ SetColor(LightGray);
+ Rectangle(X+2,Y+2,X+18,Y+18);
+ { Bras spiraux : points blanc/gris autour du centre }
+ PutPixel(X+13,Y+ 8,White);
+ PutPixel(X+15,Y+10,White);
+ PutPixel(X+15,Y+12,LightGray);
+ PutPixel(X+14,Y+14,LightGray);
+ PutPixel(X+12,Y+15,LightGray);
+ PutPixel(X+ 7,Y+12,White);
+ PutPixel(X+ 5,Y+10,White);
+ PutPixel(X+ 5,Y+ 8,LightGray);
+ PutPixel(X+ 6,Y+ 6,LightGray);
+ PutPixel(X+ 8,Y+ 5,LightGray);
+ { Bulbe central }
+ SetFillStyle(1,Yellow); SetColor(Yellow);
+ FillEllipse(X+10,Y+10,3,2);
+End;
+
 Procedure DrawToolButton(I:Integer);
 Var R:TRect;
 Begin
@@ -5208,9 +5228,10 @@ Begin
  SetColor(CLR_BTN_DARK);
  Line(R.X1,R.Y2,R.X2,R.Y2); Line(R.X2,R.Y1,R.X2,R.Y2);
  Case ToolButtons[I].IconId Of
-  TI_LUNAR: DrawLunarIcon(R.X1,R.Y1);
-  TI_SOLAR: DrawSolarIcon(R.X1,R.Y1);
-  TI_COMET: DrawCometIcon(R.X1,R.Y1);
+  TI_LUNAR:  DrawLunarIcon(R.X1,R.Y1);
+  TI_SOLAR:  DrawSolarIcon(R.X1,R.Y1);
+  TI_COMET:  DrawCometIcon(R.X1,R.Y1);
+  TI_GALAXY: DrawGalaxyIcon(R.X1,R.Y1);
  End;
 End;
 
@@ -5241,6 +5262,10 @@ Begin
  ToolButtons[TI_COMET].Action:=ACT_COMETV;
  ToolButtons[TI_COMET].IconId:=TI_COMET;
  ToolButtons[TI_COMET].Hint:='Cometes';
+ ToolButtons[TI_GALAXY].R:=MkRect(76,BtnY,76+20,BtnY+20);
+ ToolButtons[TI_GALAXY].Action:=ACT_GALAXY;
+ ToolButtons[TI_GALAXY].IconId:=TI_GALAXY;
+ ToolButtons[TI_GALAXY].Hint:='Voie Lactee';
 End;
 
 Function ToolbarHitTest(X,Y:LongInt):Integer;
@@ -5382,6 +5407,7 @@ Procedure DoAbout;   Forward;
 Procedure DoLunarCalendar; Forward;
 Procedure DoSolarSystem;   Forward;
 Procedure DoComets;        Forward;
+Procedure DoGalaxy;        Forward;
 
 { -------------------------------------------------------------------------- }
 { DoCal2JD : Conversion date civile -> jour julien (Jrjulien original)      }
@@ -16040,6 +16066,203 @@ Begin
  Until Done;
 End;
 
+{ -------------------------------------------------------------------------- }
+{ DoGalaxy : Vue de la Voie Lactee depuis le pole nord galactique.           }
+{ - Centre galactique au milieu de la fenetre.                               }
+{ - Fond schematique : 4 bras spiraux logarithmiques r=a*exp(b*phi) avec     }
+{   angle de bras (pitch) p~=12 degres et bulbe central.                     }
+{ - 10 etoiles representatives + le Soleil, positions galactocentriques      }
+{   approchees (R en kpc, theta en degres). Courbe de rotation plate         }
+{   Vrot ~ 220 km/s : omega(R) = Vrot/R, soit en rad/Myr :                   }
+{       omega = 220 km/s / (R kpc) = 0.2249 / R                              }
+{ - Bouton +/- 1 Million d'annee fait pivoter chaque etoile autour du GC.    }
+{ -------------------------------------------------------------------------- }
+Procedure DoGalaxy;
+Const
+ NB_STAR = 11;                  { Soleil + 10 etoiles }
+ NB_ARMS = 4;
+ ARM_PITCH = 0.20;              { tan(pitch) }
+ KPC_PER_PX = 0.10;             { resolution : 0.1 kpc / pixel }
+Type
+ TStarRec = Record
+  Nom : String[18];
+  R   : Extended;               { distance galactocentrique (kpc) }
+  Th  : Extended;               { longitude galactocentrique (deg, sens trigo)}
+  Col : Integer;
+ End;
+Const
+ { Le Soleil est a R=8.0 kpc, theta=0 par convention. Les autres positions  }
+ { sont des approximations basees sur distance heliocentrique + direction.  }
+ Stars:Array[1..NB_STAR] Of TStarRec = (
+  (Nom:'Soleil';        R:8.000; Th:  0.0; Col:14),
+  (Nom:'Proxima Cen';   R:8.001; Th:  0.05; Col:12),
+  (Nom:'Sirius';        R:7.998; Th: -0.02; Col:15),
+  (Nom:'Vega';          R:8.001; Th: -0.05; Col:11),
+  (Nom:'Arcturus';      R:8.000; Th:  0.08; Col:6),
+  (Nom:'Aldebaran';     R:8.020; Th: -0.10; Col:12),
+  (Nom:'Antares';       R:7.700; Th:  1.20; Col:4),
+  (Nom:'Betelgeuse';    R:8.200; Th: -1.40; Col:12),
+  (Nom:'Rigel';         R:7.900; Th: -1.80; Col:11),
+  (Nom:'Deneb';         R:8.500; Th:  5.50; Col:15),
+  (Nom:'Eta Carinae';   R:6.700; Th: -8.00; Col:13)
+ );
+Var
+ DlgR,BtnMm,BtnMp,BtnClose:TRect;
+ VX1,VY1,VX2,VY2:Integer;
+ CX,CY:Integer;
+ DTMyr:Extended;                { age relatif en Myr depuis le present }
+ PxPerKpc:Extended;
+ RangeKpc:Extended;
+ I,J,A:Integer;
+ Phi,Rr,Th,Xpc,Ypc:Extended;
+ Sx,Sy:Integer;
+ Done,NeedDraw:Boolean;
+ K:Char;
+ MX,MY,MB,OldMB:LongInt;
+ Omega,DTh:Extended;
+ InfoS:String;
+
+Begin
+ DlgR    :=MkRect(8,30,SCREEN_WIDTH-8,SCREEN_HEIGHT-30);
+ BtnMm   :=MkRect(DlgR.X1+8,  DlgR.Y2-30,DlgR.X1+228,DlgR.Y2-8);
+ BtnMp   :=MkRect(DlgR.X1+236,DlgR.Y2-30,DlgR.X1+456,DlgR.Y2-8);
+ BtnClose:=MkRect(DlgR.X2-72, DlgR.Y2-30,DlgR.X2-8, DlgR.Y2-8);
+ RangeKpc:=18.0;       { rayon affiche ~18 kpc => disque galactique entier }
+ DTMyr:=0.0;
+ Done:=False; OldMB:=0; NeedDraw:=True;
+ Repeat
+  If NeedDraw Then Begin
+   HideMouse;
+   FillRect(DlgR,CLR_DLG_BG);
+   FrameRect(DlgR,CLR_DLG_FRAME);
+   SetFillStyle(1,CLR_TITLE_BG);
+   Bar(DlgR.X1+1,DlgR.Y1+1,DlgR.X2-1,DlgR.Y1+18);
+   SetColor(CLR_TITLE_FG);
+   OutTextXY(DlgR.X1+8,DlgR.Y1+5,'Voie Lactee - vue depuis le pole nord galactique');
+   { Zone de dessin (fond noir) + clipping }
+   VX1:=DlgR.X1+4;  VY1:=DlgR.Y1+22;
+   VX2:=DlgR.X2-4;  VY2:=DlgR.Y2-44;
+   SetFillStyle(1,Black);
+   Bar(VX1,VY1,VX2,VY2);
+   CX:=(VX1+VX2) Div 2;
+   CY:=(VY1+VY2) Div 2;
+   { echelle adaptee pour que +/-18 kpc tienne dans la zone }
+   If (VY2-VY1)<(VX2-VX1) Then
+    PxPerKpc:=((VY2-VY1)/2-8)/RangeKpc
+   Else
+    PxPerKpc:=((VX2-VX1)/2-8)/RangeKpc;
+   SetViewPort(VX1,VY1,VX2,VY2,ClipOn);
+   { ----- Disque galactique : 4 bras spiraux logarithmiques ---------------- }
+   { Pour chaque bras, parcourir phi de 0 a ~4*pi avec un decalage de Pi/2.   }
+   { Chaque point est un pixel blanc faible (DarkGray ou LightGray) avec une  }
+   { petite dispersion radiale pour donner du volume.                         }
+   For A:=0 To NB_ARMS-1 Do Begin
+    For J:=0 To 240 Do Begin
+     Phi := J*(4*Pi/240) + A*(2*Pi/NB_ARMS);
+     { rayon le long du bras : Rr = 0.6 * exp(pitch*phi) }
+     Rr  := 0.6*Exp(ARM_PITCH*Phi);
+     If Rr>RangeKpc Then Break;
+     { dispersion radiale pseudo-aleatoire deterministe }
+     Th  := Phi;
+     Xpc := Rr*Cos(Th);
+     Ypc := Rr*Sin(Th);
+     Sx  := CX-VX1+Round(Xpc*PxPerKpc);
+     Sy  := CY-VY1-Round(Ypc*PxPerKpc);
+     If (J Mod 4)=0 Then
+      PutPixel(Sx,Sy,LightGray)
+     Else
+      PutPixel(Sx,Sy,DarkGray);
+     { un peu d'epaisseur autour du bras }
+     If (J Mod 3)=0 Then Begin
+      PutPixel(Sx+1,Sy,DarkGray);
+      PutPixel(Sx,Sy+1,DarkGray);
+     End;
+     If (J Mod 7)=0 Then Begin
+      PutPixel(Sx-1,Sy,DarkGray);
+      PutPixel(Sx,Sy-1,DarkGray);
+     End;
+    End;
+   End;
+   { Halo : nuage de points faiblement dispersés (deterministe) }
+   For J:=0 To 380 Do Begin
+    Phi := J*0.7;
+    Rr  := 0.5 + 14.0*Abs(Sin(J*0.13));
+    If Rr<=RangeKpc Then Begin
+     Sx:=CX-VX1+Round(Rr*Cos(Phi)*PxPerKpc);
+     Sy:=CY-VY1-Round(Rr*Sin(Phi)*PxPerKpc);
+     PutPixel(Sx,Sy,DarkGray);
+    End;
+   End;
+   { ----- Bulbe central -------------------------------------------------- }
+   SetFillStyle(1,Brown); SetColor(Brown);
+   FillEllipse(CX-VX1,CY-VY1,Round(2.5*PxPerKpc),Round(1.8*PxPerKpc));
+   SetFillStyle(1,Yellow); SetColor(Yellow);
+   FillEllipse(CX-VX1,CY-VY1,Round(0.8*PxPerKpc),Round(0.6*PxPerKpc));
+   SetColor(White);
+   OutTextXY(CX-VX1+Round(0.9*PxPerKpc),CY-VY1-4,'Sgr A*');
+   { ----- 11 etoiles (Soleil + 10 autres) -------------------------------- }
+   For I:=1 To NB_STAR Do Begin
+    { rotation differentielle (courbe plate) : omega = 220 km/s / R kpc       }
+    { en rad/Myr : 0.2249 / R                                                 }
+    Omega := 0.2249/Stars[I].R;
+    DTh   := Omega*DTMyr*180.0/Pi;                  { en degres }
+    Th    := (Stars[I].Th+DTh)*Pi/180.0;
+    Xpc   := Stars[I].R*Cos(Th);
+    Ypc   := Stars[I].R*Sin(Th);
+    Sx    := CX-VX1+Round(Xpc*PxPerKpc);
+    Sy    := CY-VY1-Round(Ypc*PxPerKpc);
+    SetFillStyle(1,Stars[I].Col); SetColor(Stars[I].Col);
+    If I=1 Then
+     FillEllipse(Sx,Sy,3,3)                          { Soleil un peu plus gros }
+    Else
+     FillEllipse(Sx,Sy,2,2);
+    SetColor(White);
+    OutTextXY(Sx+4,Sy-3,Stars[I].Nom);
+   End;
+   SetViewPort(0,0,GetMaxX,GetMaxY,ClipOff);
+   { ----- Bandeau d'info ------------------------------------------------- }
+   InfoS:='Decalage temporel : ';
+   If DTMyr>=0 Then InfoS:=InfoS+'+';
+   InfoS:=InfoS+FmtF(DTMyr,8,1)+' Million d''annees   '+
+          'Echelle : 1 kpc = '+FmtF(PxPerKpc,5,1)+' px   '+
+          'Vrot = 220 km/s (courbe plate)';
+   SetColor(CLR_FG);
+   OutTextXY(DlgR.X1+8,DlgR.Y2-42,InfoS);
+   DrawButton(BtnMm,   '< Million d''annee',    False);
+   DrawButton(BtnMp,   'Million d''annee >',    False);
+   DrawButton(BtnClose,'Fermer',                True);
+   ShowMouse;
+   NeedDraw:=False;
+  End;
+  If KeyPressed Then Begin
+   K:=ReadKey;
+   If K=#0 Then Begin
+    K:=ReadKey;
+    Case K Of
+     #75: Begin DTMyr:=DTMyr-1.0; NeedDraw:=True; End;
+     #77: Begin DTMyr:=DTMyr+1.0; NeedDraw:=True; End;
+     #71: Begin DTMyr:=0.0;       NeedDraw:=True; End;
+     #107: Done:=True;
+    End;
+   End
+   Else Begin
+    If K=#27 Then Done:=True;
+    If (K=#13) Or (K=' ') Then Done:=True;
+   End;
+  End;
+  If HasMouse Then Begin
+   ReadMouse(MX,MY,MB);
+   If (MB=1) And (OldMB=0) Then Begin
+    If PtInRect(MX,MY,BtnClose) Then Done:=True
+    Else If PtInRect(MX,MY,BtnMm) Then Begin DTMyr:=DTMyr-1.0; NeedDraw:=True; End
+    Else If PtInRect(MX,MY,BtnMp) Then Begin DTMyr:=DTMyr+1.0; NeedDraw:=True; End;
+   End;
+   OldMB:=MB;
+  End;
+  Delay(15);
+ Until Done;
+End;
+
 Procedure DoLeCouMer;
 { Lever, coucher, passage au meridien d'un astre quelconque (AD+Dec).
   Source verbatim : BIBLIL.PAS, procedure LeCouMer, branche "autres astres".
@@ -19110,6 +19333,7 @@ Begin
   ACT_LUNCAL:     DoLunarCalendar;
   ACT_SOLSYS:     DoSolarSystem;
   ACT_COMETV:     DoComets;
+  ACT_GALAXY:     DoGalaxy;
  End;
  NeedRedraw:=True;
 End;
