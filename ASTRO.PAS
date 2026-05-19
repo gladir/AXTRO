@@ -18056,7 +18056,7 @@ End;
 Procedure DoAbout;
 Begin
  ShowMessage('A propos de AXTRO',
-  'AXTRO 1.00 - Astronomie GUI - Phase 1 d''integration.');
+  'AXTRO 1.00 - Astronomie GUI.');
 End;
 
 { ========================================================================== }
