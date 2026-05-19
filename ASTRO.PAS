@@ -173,9 +173,10 @@ Const
  STATUSBAR_HEIGHT= 20;
  NUM_MENUS       = 7;
  MAX_MENU_ITEMS  = 18;
- NUM_TOOLS       = 2;
+ NUM_TOOLS       = 3;
  TI_LUNAR        = 0;
  TI_SOLAR        = 1;
+ TI_COMET        = 2;
 
  { Couleurs (palette EGA/VGA 16) }
  CLR_BG          = 7;   { LightGray }
@@ -5006,6 +5007,7 @@ Const
  ACT_SHOW      = 91;
  ACT_LUNCAL    = 92;  { calendrier lunaire mensuel }
  ACT_SOLSYS    = 93;  { systeme solaire schematique }
+ ACT_COMETV    = 94;  { visualisation des cometes }
 
 Procedure InitMenus;
 Var I:Integer;
@@ -5171,6 +5173,30 @@ Begin
  PutPixel(X+11,Y+3,LightRed);
 End;
 
+{ Icone de comete : noyau + queue diagonale (20x20). }
+Procedure DrawCometIcon(X,Y:Integer);
+Begin
+ SetFillStyle(1,Black);
+ Bar(X+2,Y+2,X+18,Y+18);
+ SetColor(LightGray);
+ Rectangle(X+2,Y+2,X+18,Y+18);
+ { Soleil en bas-droite }
+ SetFillStyle(1,Yellow); SetColor(Yellow);
+ FillEllipse(X+16,Y+16,2,2);
+ { Queue de comete : faisceau de lignes blanches depuis noyau }
+ SetColor(White);
+ Line(X+ 7,Y+ 7,X+ 4,Y+ 4);
+ Line(X+ 7,Y+ 7,X+ 3,Y+ 5);
+ Line(X+ 7,Y+ 7,X+ 5,Y+ 3);
+ SetColor(LightCyan);
+ Line(X+ 7,Y+ 7,X+ 2,Y+ 4);
+ Line(X+ 7,Y+ 7,X+ 4,Y+ 2);
+ { Coma + noyau }
+ SetFillStyle(1,LightCyan); SetColor(LightCyan);
+ FillEllipse(X+8,Y+8,2,2);
+ PutPixel(X+8,Y+8,White);
+End;
+
 Procedure DrawToolButton(I:Integer);
 Var R:TRect;
 Begin
@@ -5184,6 +5210,7 @@ Begin
  Case ToolButtons[I].IconId Of
   TI_LUNAR: DrawLunarIcon(R.X1,R.Y1);
   TI_SOLAR: DrawSolarIcon(R.X1,R.Y1);
+  TI_COMET: DrawCometIcon(R.X1,R.Y1);
  End;
 End;
 
@@ -5210,6 +5237,10 @@ Begin
  ToolButtons[TI_SOLAR].Action:=ACT_SOLSYS;
  ToolButtons[TI_SOLAR].IconId:=TI_SOLAR;
  ToolButtons[TI_SOLAR].Hint:='Systeme solaire';
+ ToolButtons[TI_COMET].R:=MkRect(52,BtnY,52+20,BtnY+20);
+ ToolButtons[TI_COMET].Action:=ACT_COMETV;
+ ToolButtons[TI_COMET].IconId:=TI_COMET;
+ ToolButtons[TI_COMET].Hint:='Cometes';
 End;
 
 Function ToolbarHitTest(X,Y:LongInt):Integer;
@@ -5350,6 +5381,7 @@ Procedure DoPlutPhys;Forward;
 Procedure DoAbout;   Forward;
 Procedure DoLunarCalendar; Forward;
 Procedure DoSolarSystem;   Forward;
+Procedure DoComets;        Forward;
 
 { -------------------------------------------------------------------------- }
 { DoCal2JD : Conversion date civile -> jour julien (Jrjulien original)      }
@@ -15744,6 +15776,270 @@ Begin
  Until Done;
 End;
 
+{ -------------------------------------------------------------------------- }
+{ DoComets : Vue heliocentrique des cometes celebres avec orbites projetees  }
+{ sur le plan de l'ecliptique. Modele keplerien deux-corps (Sun-comet) :     }
+{ - elliptiques (e<1)  : M = n*(JD-T), Kepler M=E-e*sin E, r=a(1-e*cos E)    }
+{ - paraboliques (e=1) : equation de Barker (s^3+3s = 6k(JD-T)/q^1.5)        }
+{ Rotations standard (omega,i,Omega) pour passer du plan orbital a l'        }
+{ ecliptique J2000. Terre via approximation circulaire (cf DoSolarSystem).   }
+{ -------------------------------------------------------------------------- }
+Procedure DoComets;
+Const
+ NB_COM   = 6;
+ GMS_GAUSS= 0.01720209895;            { constante de Gauss (rad/jour) }
+ EARTH_PER= 365.256;
+ EARTH_L0 = 100.467;                  { longitude moyenne Terre J2000 (deg) }
+Type
+ TCometElem = Record
+  Nom : String[18];
+  T   : Extended;                     { date du perihelie (JD) }
+  q   : Extended;                     { distance perihelique (UA) }
+  e   : Extended;                     { excentricite }
+  inc : Extended;                     { inclinaison (deg) }
+  omg : Extended;                     { argument du perihelie omega (deg) }
+  nod : Extended;                     { longitude noeud ascendant Omega (deg) }
+  Col : Integer;
+ End;
+Const
+ Comets:Array[1..NB_COM] Of TCometElem = (
+  (Nom:'1P/Halley';      T:2446470.95; q:0.5871;  e:0.96714; inc:162.262;
+   omg:111.332; nod: 58.420; Col:11),
+  (Nom:'2P/Encke';       T:2459631.00; q:0.3360;  e:0.84825; inc: 11.781;
+   omg:186.546; nod:334.568; Col:14),
+  (Nom:'109P/SwiftTuttle';T:2448968.50; q:0.9595;  e:0.96322; inc:113.454;
+   omg:152.982; nod:139.381; Col:12),
+  (Nom:'C/1995 O1 HBopp';T:2450537.40; q:0.9141;  e:0.99492; inc: 89.430;
+   omg:130.591; nod:282.471; Col:15),
+  (Nom:'C/1996 B2 Hyak.';T:2450204.90; q:0.2301;  e:0.99982; inc:124.922;
+   omg:130.176; nod:188.045; Col:9),
+  (Nom:'C/2020 F3 Neow.';T:2459034.20; q:0.2947;  e:0.99921; inc:128.937;
+   omg: 37.279; nod: 61.011; Col:13)
+ );
+Var
+ DlgR,BtnHm,BtnHp,BtnDm,BtnDp,BtnClose:TRect;
+ Yr,Mn0,Dy,Dw:Word;
+ Hh,Mm,Ss,Hu:Word;
+ cJD,T,DT:Extended;
+ VX1,VY1,VX2,VY2:Integer;
+ CX,CY:Integer;
+ ScaleAU:Extended;                   { pixels par UA }
+ I,J:Integer;
+ Done,NeedDraw:Boolean;
+ K:Char;
+ MX,MY,MB,OldMB:LongInt;
+ sQu,sMs,sAn,sHour,sMin:LongInt;
+ sSc:Extended;
+ InfoS:String;
+ a,n,M,E,nu,r,xo,yo:Extended;
+ ci,si,co,so,cn,sn:Extended;
+ Px,Pyy,Pz,Qxx,Qyy,Qz:Extended;       { matrice de rotation orbite->ecliptique }
+ Xh,Yh,Zh:Extended;
+ EarthAng,EarthX,EarthY:Extended;
+ BodyX,BodyY:Integer;
+ s,s3,W,tau:Extended;
+ Px1,Py1,Px2,Py2:Integer;
+ PrevSet:Boolean;
+
+ { Resout l'equation de Kepler par iteration de Newton-Raphson. }
+ Function SolveKepler(MM,ec:Extended):Extended;
+ Var Ek,dEk:Extended; It2:Integer;
+ Begin
+  Ek:=MM; If ec>0.8 Then Ek:=Pi;
+  For It2:=1 To 30 Do Begin
+   dEk:=(Ek-ec*Sin(Ek)-MM)/(1-ec*Cos(Ek));
+   Ek:=Ek-dEk;
+   If Abs(dEk)<1.0E-12 Then Break;
+  End;
+  SolveKepler:=Ek;
+ End;
+
+ { Position heliocentrique (X,Y dans le plan ecliptique) pour la comete I    }
+ { au jour julien JD. Retourne True si valide (sinon hyperbolique non gere). }
+ Function CometXY(IC:Integer; JDt:Extended; Var ox,oy:Extended):Boolean;
+ Var ec,qq,aa,nn,MM,Ek,nuu,rr,xx,yy,zz:Extended;
+ Begin
+  CometXY:=False;
+  ec:=Comets[IC].e; qq:=Comets[IC].q;
+  { Vecteurs P et Q du repere orbital dans l'ecliptique }
+  ci:=Cos(Comets[IC].inc*Pi/180); si:=Sin(Comets[IC].inc*Pi/180);
+  co:=Cos(Comets[IC].omg*Pi/180); so:=Sin(Comets[IC].omg*Pi/180);
+  cn:=Cos(Comets[IC].nod*Pi/180); sn:=Sin(Comets[IC].nod*Pi/180);
+  Px := cn*co - sn*so*ci;
+  Pyy:= sn*co + cn*so*ci;
+  Pz := so*si;
+  Qxx:=-cn*so - sn*co*ci;
+  Qyy:=-sn*so + cn*co*ci;
+  Qz := co*si;
+  If ec<0.999 Then Begin
+   { Orbite elliptique }
+   aa:=qq/(1-ec);
+   nn:=GMS_GAUSS/Sqrt(aa*aa*aa);
+   MM:=nn*(JDt-Comets[IC].T);
+   { ramener MM dans [-Pi,Pi] }
+   While MM> Pi Do MM:=MM-2*Pi;
+   While MM<-Pi Do MM:=MM+2*Pi;
+   Ek:=SolveKepler(MM,ec);
+   xx:=aa*(Cos(Ek)-ec);
+   yy:=aa*Sqrt(1-ec*ec)*Sin(Ek);
+  End
+  Else Begin
+   { Quasi-parabolique : equation de Barker (suppose e=1, q en UA) }
+   W:=1.5*GMS_GAUSS*(JDt-Comets[IC].T)/(qq*Sqrt(qq+qq));
+   { resolution de s^3 + 3s = 2W par formule de Cardan }
+   tau:=Sqrt(W*W+1);
+   s:=Exp(Ln(tau+W)/3)-Exp(Ln(tau-W+1.0E-30)/3);
+   xx:=qq*(1-s*s);
+   yy:=2*qq*s;
+  End;
+  ox:=Px*xx+Qxx*yy;
+  oy:=Pyy*xx+Qyy*yy;
+  CometXY:=True;
+ End;
+
+Begin
+ GetDate(Yr,Mn0,Dy,Dw);
+ GetTime(Hh,Mm,Ss,Hu);
+ cJD := jj(Dy,Mn0,Yr,Hh,Mm,Ss);
+ DlgR    :=MkRect(8,30,SCREEN_WIDTH-8,SCREEN_HEIGHT-30);
+ BtnHm   :=MkRect(DlgR.X1+8,  DlgR.Y2-30,DlgR.X1+120,DlgR.Y2-8);
+ BtnHp   :=MkRect(DlgR.X1+126,DlgR.Y2-30,DlgR.X1+238,DlgR.Y2-8);
+ BtnDm   :=MkRect(DlgR.X1+248,DlgR.Y2-30,DlgR.X1+352,DlgR.Y2-8);
+ BtnDp   :=MkRect(DlgR.X1+358,DlgR.Y2-30,DlgR.X1+462,DlgR.Y2-8);
+ BtnClose:=MkRect(DlgR.X2-72, DlgR.Y2-30,DlgR.X2-8, DlgR.Y2-8);
+ ScaleAU :=18.0;     { 18 px / UA → orbite Terre (~1 UA) bien visible }
+ Done:=False; OldMB:=0; NeedDraw:=True;
+ Repeat
+  If NeedDraw Then Begin
+   HideMouse;
+   FillRect(DlgR,CLR_DLG_BG);
+   FrameRect(DlgR,CLR_DLG_FRAME);
+   SetFillStyle(1,CLR_TITLE_BG);
+   Bar(DlgR.X1+1,DlgR.Y1+1,DlgR.X2-1,DlgR.Y1+18);
+   SetColor(CLR_TITLE_FG);
+   OutTextXY(DlgR.X1+8,DlgR.Y1+5,'Cometes - vue heliocentrique (plan ecliptique)');
+   { Zone de dessin (fond noir) + clipping }
+   VX1:=DlgR.X1+4;  VY1:=DlgR.Y1+22;
+   VX2:=DlgR.X2-4;  VY2:=DlgR.Y2-44;
+   SetFillStyle(1,Black);
+   Bar(VX1,VY1,VX2,VY2);
+   CX:=(VX1+VX2) Div 2;
+   CY:=(VY1+VY2) Div 2;
+   SetViewPort(VX1,VY1,VX2,VY2,ClipOn);
+   { Soleil au centre }
+   SetFillStyle(1,Yellow); SetColor(Yellow);
+   FillEllipse(CX-VX1,CY-VY1,6,6);
+   { Orbite circulaire de la Terre (1 UA) en bleu clair pointille }
+   SetLineStyle(1,0,1);
+   SetColor(LightBlue);
+   Circle(CX-VX1,CY-VY1,Round(ScaleAU));
+   { Position de la Terre }
+   EarthAng:=(EARTH_L0+360.0*(cJD-2451545.0)/EARTH_PER)*Pi/180.0;
+   EarthX:= Cos(EarthAng);
+   EarthY:= Sin(EarthAng);
+   BodyX:=CX-VX1+Round(EarthX*ScaleAU);
+   BodyY:=CY-VY1-Round(EarthY*ScaleAU);
+   SetLineStyle(0,0,1);
+   SetFillStyle(1,Blue); SetColor(Blue);
+   FillEllipse(BodyX,BodyY,3,3);
+   SetColor(White);
+   OutTextXY(BodyX+5,BodyY-3,'Terre');
+   { Pour chaque comete : tracer l'orbite en points espaces (240 echantillons) }
+   { puis la position courante.                                                }
+   For I:=1 To NB_COM Do Begin
+    SetColor(Comets[I].Col);
+    For J:=0 To 240 Do Begin
+     If Comets[I].e<0.999 Then Begin
+      a:=Comets[I].q/(1-Comets[I].e);
+      n:=GMS_GAUSS/Sqrt(a*a*a);
+      { echantillonner sur une periode complete }
+      M:=-Pi+J*(2*Pi/240);
+      DT:=M/n;
+      If CometXY(I,Comets[I].T+DT,xo,yo) Then Begin
+       Px2:=CX-VX1+Round(xo*ScaleAU);
+       Py2:=CY-VY1-Round(yo*ScaleAU);
+       PutPixel(Px2,Py2,Comets[I].Col);
+      End;
+     End
+     Else Begin
+      { Parabolique : echantillonner +/- 200 ans autour du perihelie }
+      DT:=-73000.0+J*(146000.0/240);
+      If CometXY(I,Comets[I].T+DT,xo,yo) Then Begin
+       Px2:=CX-VX1+Round(xo*ScaleAU);
+       Py2:=CY-VY1-Round(yo*ScaleAU);
+       PutPixel(Px2,Py2,Comets[I].Col);
+      End;
+     End;
+    End;
+    { Position actuelle de la comete }
+    If CometXY(I,cJD,xo,yo) Then Begin
+     Px2:=CX-VX1+Round(xo*ScaleAU);
+     Py2:=CY-VY1-Round(yo*ScaleAU);
+     SetFillStyle(1,Comets[I].Col); SetColor(Comets[I].Col);
+     FillEllipse(Px2,Py2,3,3);
+     SetColor(White);
+     OutTextXY(Px2+5,Py2-3,Comets[I].Nom);
+    End;
+   End;
+   { Etiquette Soleil }
+   SetColor(Yellow);
+   OutTextXY(CX-VX1+8,CY-VY1-4,'Soleil');
+   SetViewPort(0,0,GetMaxX,GetMaxY,ClipOff);
+   { Bandeau d'information }
+   InfoS:='Date : '+FmtI(Dy,2)+' '+mth[Mn0]+' '+FmtI(Yr,4)+
+          '   Heure TU : '+FmtI(Hh,2)+'h'+FmtI(Mm,2)+'m'+
+          '   JD = '+FmtF(cJD,14,4);
+   SetColor(CLR_FG);
+   OutTextXY(DlgR.X1+8,DlgR.Y2-42,InfoS);
+   DrawButton(BtnHm,   '< Heure',     False);
+   DrawButton(BtnHp,   'Heure >',     False);
+   DrawButton(BtnDm,   '<< Jour',     False);
+   DrawButton(BtnDp,   'Jour >>',     False);
+   DrawButton(BtnClose,'Fermer',      True);
+   ShowMouse;
+   NeedDraw:=False;
+  End;
+  If KeyPressed Then Begin
+   K:=ReadKey;
+   If K=#0 Then Begin
+    K:=ReadKey;
+    Case K Of
+     #75: Begin cJD:=cJD-1.0/24.0; NeedDraw:=True; End;
+     #77: Begin cJD:=cJD+1.0/24.0; NeedDraw:=True; End;
+     #73: Begin cJD:=cJD-1.0;      NeedDraw:=True; End;
+     #81: Begin cJD:=cJD+1.0;      NeedDraw:=True; End;
+     #71: Begin
+      GetDate(Yr,Mn0,Dy,Dw); GetTime(Hh,Mm,Ss,Hu);
+      cJD:=jj(Dy,Mn0,Yr,Hh,Mm,Ss);
+      NeedDraw:=True;
+     End;
+     #107: Done:=True;
+    End;
+   End
+   Else Begin
+    If K=#27 Then Done:=True;
+    If (K=#13) Or (K=' ') Then Done:=True;
+   End;
+  End;
+  If HasMouse Then Begin
+   ReadMouse(MX,MY,MB);
+   If (MB=1) And (OldMB=0) Then Begin
+    If PtInRect(MX,MY,BtnClose) Then Done:=True
+    Else If PtInRect(MX,MY,BtnHm) Then Begin cJD:=cJD-1.0/24.0; NeedDraw:=True; End
+    Else If PtInRect(MX,MY,BtnHp) Then Begin cJD:=cJD+1.0/24.0; NeedDraw:=True; End
+    Else If PtInRect(MX,MY,BtnDm) Then Begin cJD:=cJD-1.0;      NeedDraw:=True; End
+    Else If PtInRect(MX,MY,BtnDp) Then Begin cJD:=cJD+1.0;      NeedDraw:=True; End;
+   End;
+   OldMB:=MB;
+  End;
+  If NeedDraw Then Begin
+   cal(cJD,sQu,sMs,sAn,sHour,sMin,sSc);
+   Dy:=sQu; Mn0:=sMs; Yr:=sAn; Hh:=sHour; Mm:=sMin;
+  End;
+  Delay(15);
+ Until Done;
+End;
+
 Procedure DoLeCouMer;
 { Lever, coucher, passage au meridien d'un astre quelconque (AD+Dec).
   Source verbatim : BIBLIL.PAS, procedure LeCouMer, branche "autres astres".
@@ -18813,6 +19109,7 @@ Begin
   ACT_PLUTPHYS:   DoPlutPhys;
   ACT_LUNCAL:     DoLunarCalendar;
   ACT_SOLSYS:     DoSolarSystem;
+  ACT_COMETV:     DoComets;
  End;
  NeedRedraw:=True;
 End;
