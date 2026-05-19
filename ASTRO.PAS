@@ -5235,7 +5235,7 @@ End;
 Procedure DrawMenuPopup(MenuIdx:Integer);
 Var
  R:TRect;
- I,Y,W,H:Integer;
+ I,Y,W,H,X0:Integer;
  ItRect:TRect;
 Begin
  W:=0;
@@ -5244,8 +5244,10 @@ Begin
    W:=Length(Menus[MenuIdx].Items[I].Caption)*8+20;
  If W<120 Then W:=120;
  H:=Menus[MenuIdx].ItemCount*16+4;
- R:=MkRect(Menus[MenuIdx].BarX1,MENUBAR_HEIGHT,
-           Menus[MenuIdx].BarX1+W,MENUBAR_HEIGHT+H);
+ X0:=Menus[MenuIdx].BarX1;
+ If X0+W>SCREEN_WIDTH-1 Then X0:=SCREEN_WIDTH-1-W;
+ If X0<0 Then X0:=0;
+ R:=MkRect(X0,MENUBAR_HEIGHT,X0+W,MENUBAR_HEIGHT+H);
  SetFillStyle(1,CLR_BTN);
  Bar(R.X1,R.Y1,R.X2,R.Y2);
  SetColor(CLR_FG);
@@ -5285,7 +5287,7 @@ Begin
 End;
 
 Function MenuItemHitTest(MenuIdx:Integer; X,Y:LongInt):Integer;
-Var W,H,Idx:Integer;
+Var W,H,Idx,X0:Integer;
 Begin
  MenuItemHitTest:=-1;
  W:=0;
@@ -5294,7 +5296,10 @@ Begin
    W:=Length(Menus[MenuIdx].Items[Idx].Caption)*8+20;
  If W<120 Then W:=120;
  H:=Menus[MenuIdx].ItemCount*16+4;
- If (X<Menus[MenuIdx].BarX1) Or (X>Menus[MenuIdx].BarX1+W) Then Exit;
+ X0:=Menus[MenuIdx].BarX1;
+ If X0+W>SCREEN_WIDTH-1 Then X0:=SCREEN_WIDTH-1-W;
+ If X0<0 Then X0:=0;
+ If (X<X0) Or (X>X0+W) Then Exit;
  If (Y<MENUBAR_HEIGHT+2) Or (Y>MENUBAR_HEIGHT+H-2) Then Exit;
  Idx:=(Y-MENUBAR_HEIGHT-2) Div 16;
  If (Idx>=0) And (Idx<Menus[MenuIdx].ItemCount) And
