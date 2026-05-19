@@ -23982,9 +23982,12 @@ Type
   Dist   : Real;
   ADh    : Real;
   DecDeg : Real;
+  Rank   : Integer;
  End;
 Var
  SD : Array[1..NB_STARS] Of TStarRec;
+ Tmp: TStarRec;
+ SI,SJ: Integer;
  DlgR,ListR,SbR,SbThumb,FactR,SphR,BtnClose : TRect;
  Sel,TopIdx,VisRows : Integer;
  Done,NeedDraw : Boolean;
@@ -23998,7 +24001,7 @@ Var
  Begin
   SD[I].Nom:=Nm; SD[I].Bayer:=By; SD[I].Constel:=Cn;
   SD[I].Spectre:=Sp; SD[I].Mag:=Mg; SD[I].Dist:=Di;
-  SD[I].ADh:=Ah; SD[I].DecDeg:=Dc;
+  SD[I].ADh:=Ah; SD[I].DecDeg:=Dc; SD[I].Rank:=I;
  End;
 
  Function StarColor(Spec:String):Word;
@@ -24109,7 +24112,7 @@ Var
   AS( 84,'Hassaleh',       'iot Aur','Aur','K3II',    2.69,  490.0,  4.9497, 33.1661);
   AS( 85,'Enif',           'eps Peg','Peg','K2Ib',    2.39,  690.0, 21.7364,  9.8750);
   AS( 86,'Algenib',        'gam Peg','Peg','B2IV',    2.83,  390.0,  0.2207, 15.1836);
-  AS( 87,'Saiph',          'kap Ori','Ori','B0.5Iav', 2.06,  650.0,  5.7959, -9.6697);
+  AS( 87,'Mago',           'HD32518','Cam','K1III',   6.43,   396.0,  5.0461, 69.6353);
   AS( 88,'Acamar',         'tet Eri','Eri','A4III',   2.88,  120.0,  2.9710,-40.3047);
   AS( 89,'Alphirk',        'bet Cep','Cep','B2IIIev', 3.23,  690.0, 21.4776, 70.5607);
   AS( 90,'Algenib (Mirfak)','alf Per','Per','F5Ib',   1.79,  590.0,  3.4054, 49.8612);
@@ -24120,15 +24123,15 @@ Var
   AS( 95,'Sadalsuud',      'bet Aqr','Aqr','G0Ib',    2.87,  610.0, 21.5258, -5.5712);
   AS( 96,'Sadalmelik',     'alf Aqr','Aqr','G2Ib',    2.95,  520.0, 22.0964, -0.3199);
   AS( 97,'Albireo',        'bet Cyg','Cyg','K2II+B8V',3.05,  430.0, 19.5126, 27.9597);
-  AS( 98,'Vindemiatrix',   'eps Vir','Vir','G8III',   2.85,  109.6, 13.0362, 10.9591);
+  AS( 98,'Tupi',           'HD23079','Ret','F8/G0V',  7.12,   112.0,  3.6429,-52.7011);
   AS( 99,'Mizar',          'zet UMa','UMa','A1V+A1V', 2.23,   82.9, 13.3988, 54.9254);
   AS(100,'Alcor',          '80  UMa','UMa','A5V',     3.99,   81.7, 13.4204, 54.9881);
   { 101..200 : mag ~2.5..3.6 }
-  AS(101,'Mintaka',        'del Ori','Ori','O9.5II',  2.41,  900.0,  5.5334, -0.2991);
+  AS(101,'Paikauhale',     'tau Sco','Sco','B0V',     2.82,   470.0, 16.6020,-28.2160);
   AS(102,'Megrez',         'del UMa','UMa','A3Vvar',  3.31,   80.5, 12.2572, 57.0326);
   AS(103,'Tarazed',        'gam Aql','Aql','K3II',    2.72,  395.0, 19.7710, 10.6133);
   AS(104,'Alshain',        'bet Aql','Aql','G8IV',    3.71,   45.0, 19.9219,  6.4068);
-  AS(105,'Vindemiatrix',   'eps Vir','Vir','G8III',   2.85,  109.6, 13.0362, 10.9591);
+  AS(105,'11 Lac',         '11 Lac','Lac','K2III',    4.46,   102.0, 22.6831, 44.2779);
   AS(106,'Heze',           'zet Vir','Vir','A3V',     3.37,   74.1, 13.5790, -0.5958);
   AS(107,'Auva',           'del Vir','Vir','M3III',   3.39,  198.0, 12.9266,  3.3974);
   AS(108,'Zavijava',       'bet Vir','Vir','F9V',     3.59,   35.7, 11.8443,  1.7647);
@@ -24150,7 +24153,7 @@ Var
   AS(124,'Propus',         'eta Gem','Gem','M3III',   3.31,  349.0,  6.2479, 22.5064);
   AS(125,'Tejat',          'mu  Gem','Gem','M3III',   2.87,  230.0,  6.3829, 22.5135);
   AS(126,'Alzirr',         'xi  Gem','Gem','F5IV',    3.36,   58.7,  6.7541, 12.8956);
-  AS(127,'Alhena',         'gam Gem','Gem','A1.5IV',  1.93,  105.0,  6.6286, 16.3993);
+  AS(127,'Ginan',          'eps Cru','Cru','K3III',   3.59,   228.0, 12.3565,-60.4012);
   AS(128,'Tarazet',        'tau Tau','Tau','B3V',     4.28,  394.0,  4.7042, 22.9648);
   AS(129,'Electra',        '17  Tau','Tau','B6III',   3.72,  410.0,  3.7470, 24.1133);
   AS(130,'Alcyone',        'eta Tau','Tau','B7IIIe',  2.85,  440.0,  3.7913, 24.1052);
@@ -24185,7 +24188,7 @@ Var
   AS(159,'Azha',           'eta Eri','Eri','K1III',   3.89,  137.0,  2.9404, -8.8983);
   AS(160,'Theemim',        'ups2 Eri','Eri','G8III',  3.82,  202.0,  4.5917,-30.5623);
   AS(161,'Angetenar',      'tau2 Eri','Eri','K0III',  4.75,  187.0,  2.8480,-21.0040);
-  AS(162,'Acamar',         'tet Eri','Eri','A4III',   2.88,  120.0,  2.9710,-40.3047);
+  AS(162,'Sualocin',       'alf Del','Del','B9V',     3.77,   254.0, 20.6605, 15.9120);
   AS(163,'Beta Pic',       'bet Pic','Pic','A6V',     3.85,   63.4,  5.7831,-51.0666);
   AS(164,'Alpha Pic',      'alf Pic','Pic','A8VnkA6', 3.27,   97.0,  6.8009,-61.9416);
   AS(165,'Gamma Pic',      'gam Pic','Pic','K1III',   4.50,  175.0,  5.8333,-56.1660);
@@ -24245,7 +24248,7 @@ Var
   AS(218,'Tau Her',        'tau Her','Her','B5IV',    3.91,  309.0, 16.3170, 46.3134);
   AS(219,'Eta Her',        'eta Her','Her','G7.5IIIb',3.48,  112.0, 16.7148, 38.9223);
   AS(220,'Zeta Her',       'zet Her','Her','G0IV',    2.81,   35.0, 16.6883, 31.6027);
-  AS(221,'Vega',           'alf Lyr','Lyr','A0Va',    0.03,   25.0, 18.6156, 38.7836);
+  AS(221,'Cuancoa',        'HD175607','Sgr','G6V',    8.61,   147.0, 18.9866,-66.6647);
   AS(222,'Sheliak',        'bet Lyr','Lyr','B7Vpe',   3.45,  960.0, 18.8347, 33.3627);
   AS(223,'Sulafat',        'gam Lyr','Lyr','B9III',   3.24,  620.0, 18.9824, 32.6896);
   AS(224,'Delta1 Lyr',     'del1 Lyr','Lyr','B2.5V',  5.58,  900.0, 18.9387, 36.9743);
@@ -24253,7 +24256,7 @@ Var
   AS(226,'Aladfar',        'eta Lyr','Lyr','B2.5IV',  4.39, 1390.0, 19.2228, 39.1457);
   AS(227,'RR Lyrae',       'RR  Lyr','Lyr','A8-F7',   7.50,  860.0, 19.4317, 42.7843);
   AS(228,'Albireo A',      'bet Cyg','Cyg','K2II',    3.05,  430.0, 19.5126, 27.9597);
-  AS(229,'Sadr',           'gam Cyg','Cyg','F8Iab',   2.23, 1500.0, 20.3705, 40.2566);
+  AS(229,'Copernicus',     '55 Cnc','Cnc','G8V',      5.95,    41.0,  8.9265, 28.3300);
   AS(230,'Gienah',         'eps Cyg','Cyg','K0III',   2.48,   72.0, 20.7702, 33.9703);
   AS(231,'Aljanah',        'eps Cyg','Cyg','K0III',   2.48,   72.0, 20.7702, 33.9703);
   AS(232,'Fawaris',        'del Cyg','Cyg','B9.5IV',  2.86,  165.0, 19.7496, 45.1308);
@@ -24265,30 +24268,30 @@ Var
   AS(238,'Eta Cyg',        'eta Cyg','Cyg','K0III',   3.89,  135.0, 19.9381, 35.0834);
   AS(239,'Iota Cyg',       'iot Cyg','Cyg','A5Vn',    3.79,  121.0, 19.4924, 51.7299);
   AS(240,'Theta Cyg',      'tet Cyg','Cyg','F4V',     4.49,   60.0, 19.6260, 50.2206);
-  AS(241,'Enif',           'eps Peg','Peg','K2Ib',    2.39,  690.0, 21.7364,  9.8750);
+  AS(241,'Kraz',           'bet Crv','Crv','G5II',    2.65,   146.0, 12.5740,-23.3964);
   AS(242,'Homam',          'zet Peg','Peg','B8V',     3.40,  209.0, 22.6916, 10.8313);
   AS(243,'Matar',          'eta Peg','Peg','G2II+F0V',2.94,  215.0, 22.7170, 30.2213);
   AS(244,'Baham',          'tet Peg','Peg','A1V',     3.52,   97.0, 22.1700,  6.1979);
   AS(245,'Sadalbari',      'mu  Peg','Peg','G8III',   3.51,  117.0, 22.8001, 24.6035);
   AS(246,'Salm',           'tau Peg','Peg','A5V',     4.58,  170.0, 23.3370, 23.7415);
-  AS(247,'Markab',         'alf Peg','Peg','B9III',   2.49,  133.0, 23.0793, 15.2052);
-  AS(248,'Algenib',        'gam Peg','Peg','B2IV',    2.83,  390.0,  0.2207, 15.1836);
-  AS(249,'Scheat',         'bet Peg','Peg','M2.5II',  2.42,  196.0, 23.0629, 28.0828);
-  AS(250,'Alpheratz',      'alf And','And','B8IVpMnHg',2.06,  97.0,  0.1398, 29.0904);
-  AS(251,'Mirach',         'bet And','And','M0III',   2.05,  197.0,  1.1622, 35.6206);
-  AS(252,'Almach',         'gam And','And','K3IIb',   2.10,  390.0,  2.0650, 42.3297);
+  AS(247,'Zaniah',         'eta Vir','Vir','A2V',     3.89,   265.0, 12.3324, -0.6669);
+  AS(248,'Aldulfin',       'eps Del','Del','B6III',   4.03,   358.0, 20.5566, 11.3030);
+  AS(249,'Wattle',         'HD11977','Hor','G5III',   4.71,   218.0,  1.9111,-33.5944);
+  AS(250,'Chara',          'bet CVn','CVn','G0V',     4.26,    27.4, 12.5612, 41.3577);
+  AS(251,'Fafnir',         '42 Dra','Dra','K1.5III',  4.83,   314.0, 18.4108, 65.5635);
+  AS(252,'Imai',           'del Cru','Cru','B2IV',    2.79,   345.0, 12.2522,-58.7489);
   AS(253,'Delta And',      'del And','And','K3III',   3.27,  101.0,  0.6553, 30.8612);
   AS(254,'Adhil',          'xi  And','And','K0II',    4.87,  217.0,  1.3756, 45.5292);
   AS(255,'Nembus',         '51  And','And','K3III',   3.59,  173.0,  1.6307, 48.6283);
   AS(256,'Titawin',        'ups And','And','F8V',     4.10,   44.0,  1.6128, 41.4054);
   AS(257,'Veritate',       '14  And','And','K0III',   5.22,  246.0, 23.5099, 39.2358);
-  AS(258,'Hamal',          'alf Ari','Ari','K2III',   2.00,   65.9,  2.1196, 23.4624);
-  AS(259,'Sheratan',       'bet Ari','Ari','A5V',     2.64,   59.6,  1.9105, 20.8081);
-  AS(260,'Mesarthim',      'gam Ari','Ari','B9V',     3.86,  204.0,  1.8845, 19.2937);
+  AS(258,'Proxima Cen',    'alf CenC','Cen','M5.5Ve', 11.13,    4.24, 14.4965,-62.6814);
+  AS(259,'Hunor',          'HD147506','Her','F8V',    8.71,   418.0, 16.7515, 41.0488);
+  AS(260,'Pipirima',       'mu2 Sco','Sco','B2IV',    3.56,   474.0, 16.8696,-38.0173);
   AS(261,'Botein',         'del Ari','Ari','K2III',   4.35,  170.0,  3.1959, 19.7269);
-  AS(262,'Bharani',        '41  Ari','Ari','B8IV',    3.61,  166.0,  2.8298, 27.2606);
-  AS(263,'Sceptrum',       '53  Eri','Eri','K1III',   3.86,  108.0,  4.6403,-14.3034);
-  AS(264,'Rastaban',       'bet Dra','Dra','G2Ib',    2.79,  380.0, 17.5071, 52.3014);
+  AS(262,'Gomeisa',        'bet CMi','CMi','B8Ve',    2.89,   162.0,  7.4527,  8.2893);
+  AS(263,'Chechia',        'HD192699','Aql','K0',     6.45,   220.0, 20.2706,  4.5731);
+  AS(264,'Castula',        'ups Cas','Cas','G8III',   4.83,   409.0,  0.9930, 58.9719);
   AS(265,'Sadachbia',      'gam Aqr','Aqr','A0V',     3.84,  158.0, 22.3614, -1.3873);
   AS(266,'Skat',           'del Aqr','Aqr','A3V',     3.27,  113.0, 22.9108,-15.8208);
   AS(267,'Albali',         'eps Aqr','Aqr','A1V',     3.78,  215.0, 20.7947, -9.4958);
@@ -24296,43 +24299,43 @@ Var
   AS(269,'Hydor',          'lam Aqr','Aqr','M2.5III', 3.73,  392.0, 22.8762, -7.5797);
   AS(270,'Bunda',          'xi  Aqr','Aqr','A7V',     4.69,  179.0, 21.6258, -7.8505);
   AS(271,'Sadalachbia',    'gam Aqr','Aqr','A0V',     3.84,  158.0, 22.3614, -1.3873);
-  AS(272,'Sadalsuud',      'bet Aqr','Aqr','G0Ib',    2.87,  610.0, 21.5258, -5.5712);
-  AS(273,'Sadalmelik',     'alf Aqr','Aqr','G2Ib',    2.95,  520.0, 22.0964, -0.3199);
+  AS(272,'Tianyu',         '7 Dra','Dra','K5III',     5.43,   525.0, 12.8569, 70.6014);
+  AS(273,'Tianyi',         '8 Dra','Dra','K0III',     5.24,   285.0, 12.9015, 65.4250);
   AS(274,'Fum al Samakah', 'bet Psc','Psc','B6Ve',    4.48,  410.0, 23.0392,  3.8200);
   AS(275,'Alrescha',       'alf Psc','Psc','A0p+A3m', 3.82,  139.0,  2.0349,  2.7637);
   AS(276,'Torcular',       'omi Psc','Psc','G8III',   4.27,  258.0,  1.7826,  9.1573);
   AS(277,'Revati',         'zet Psc','Psc','A7IV',    5.21,  148.0,  1.2243,  7.5853);
   AS(278,'Kullat Nunu',    'eta Psc','Psc','G7IIIa',  3.62,  294.0,  1.5247, 15.3458);
-  AS(279,'Diphda',         'bet Cet','Cet','K0III',   2.04,   96.3,  0.7264,-17.9866);
-  AS(280,'Menkar',         'alf Cet','Cet','M1.5IIIa',2.54,  249.0,  3.0379,  4.0897);
-  AS(281,'Mira',           'omi Cet','Cet','M7IIIe',  3.04,  299.0,  2.3225, -2.9776);
+  AS(279,'Helvetios',      '51 Peg','Peg','G2IV',     5.49,    50.9, 22.9576, 20.7686);
+  AS(280,'Xamidimura',     'mu1 Sco','Sco','B1.5IV',  3.04,   821.0, 16.8623,-38.0475);
+  AS(281,'Ras El Australis','eps Leo','Leo','G1II',   2.97,   247.0,  9.7644, 23.7740);
   AS(282,'Almaaz',         'eps Aur','Aur','F0Ia',    2.99, 2000.0,  5.0327, 43.8233);
   AS(283,'Haedus',         'eta Aur','Aur','B3V',     3.18,  219.0,  5.1086, 41.2358);
   AS(284,'Saclateni',      'zet Aur','Aur','K4Ib',    3.69,  790.0,  5.0392, 41.0758);
   AS(285,'Theta Aur',      'tet Aur','Aur','A0p',     2.62,  173.0,  5.9956, 37.2126);
   AS(286,'Praja',          'iot Aur','Aur','K3II',    2.69,  490.0,  4.9497, 33.1661);
   AS(287,'Sadatoni',       'zet Aur','Aur','K4Ib',    3.69,  790.0,  5.0392, 41.0758);
-  AS(288,'Hassaleh',       'iot Aur','Aur','K3II',    2.69,  490.0,  4.9497, 33.1661);
+  AS(288,'Praecipua',      '46 LMi','LMi','K0III',    3.83,    98.0, 10.8814, 34.2148);
   AS(289,'Lambda Aur',     'lam Aur','Aur','G1.5IV',  4.71,   41.2,  5.3175, 40.0991);
   AS(290,'Atik',           'omi Per','Per','B1III',   3.83,  1500.0, 3.7359, 32.2885);
   AS(291,'Gorgonea Tertia','rho Per','Per','M4II',    3.39,  325.0,  3.0825, 38.8403);
   AS(292,'Misam',          'kap Per','Per','K0III',   3.79,  112.0,  3.1576, 44.8579);
   AS(293,'Menkib',         'xi  Per','Per','O7.5III', 3.98, 1200.0,  3.9810, 35.7910);
   AS(294,'Atik2',          'zet Per','Per','B1Ib',    2.84,  750.0,  3.9024, 31.8836);
-  AS(295,'Mirfak',         'alf Per','Per','F5Ib',    1.79,  590.0,  3.4054, 49.8612);
-  AS(296,'Algol',          'bet Per','Per','B8V',     2.12,   90.0,  3.1361, 40.9556);
+  AS(295,'Fulu',           'zet Cas','Cas','B2IV',    3.66,   600.0,  0.9491, 53.8969);
+  AS(296,'Aldhanab',       'gam Gru','Gru','B8III',   3.00,   211.0, 21.8983,-37.3648);
   AS(297,'Miram',          'eta Per','Per','K3Ib',    3.77,  1330.0, 2.8479, 55.8954);
   AS(298,'Achird',         'eta Cas','Cas','G0V+M0V', 3.44,   19.4,  0.8197, 57.8157);
   AS(299,'Ruchbah',        'del Cas','Cas','A5III',   2.66,   99.4,  1.4304, 60.2354);
   AS(300,'Segin',          'eps Cas','Cas','B3III',   3.35,  410.0,  1.9067, 63.6700);
   { 301..400 : mag ~3.5..4.3 }
-  AS(301,'Caph',           'bet Cas','Cas','F2III',   2.27,   54.7,  0.1530, 59.1498);
-  AS(302,'Schedar',        'alf Cas','Cas','K0IIIa',  2.24,  228.0,  0.6751, 56.5374);
+  AS(301,'Hatysa',         'iot Ori','Ori','O9III',   2.77,  1340.0,  5.5934, -5.9099);
+  AS(302,'Tojil',          'HD213240','Gru','G6V',    6.81,   132.0, 22.5333,-49.0167);
   AS(303,'Navi',           'gam Cas','Cas','B0.5IVpe',2.47,  610.0,  0.9451, 60.7167);
   AS(304,'Marfak',         'tet Cas','Cas','A7V',     4.33,  137.0,  1.1924, 55.1490);
-  AS(305,'Errai',          'gam Cep','Cep','K1IV',    3.21,   45.0, 23.6555, 77.6322);
+  AS(305,'Minkar',         'eps Crv','Crv','K2III',   3.02,   318.0, 12.4332,-22.6197);
   AS(306,'Alfirk',         'bet Cep','Cep','B2IIIev', 3.23,  690.0, 21.4776, 70.5607);
-  AS(307,'Alderamin',      'alf Cep','Cep','A8Vn',    2.45,   49.0, 21.3097, 62.5856);
+  AS(307,'Rotanev',        'bet Del','Del','F5III',   3.63,    97.0, 20.6253, 14.5953);
   AS(308,'Alrai',          'gam Cep','Cep','K1IV',    3.21,   45.0, 23.6555, 77.6322);
   AS(309,'Garnet Star',    'mu  Cep','Cep','M2Ia',    4.04, 5000.0, 21.7252, 58.7800);
   AS(310,'Herschel Garnet','mu  Cep','Cep','M2Ia',    4.04, 5000.0, 21.7252, 58.7800);
@@ -24361,23 +24364,23 @@ Var
   AS(333,'Epsilon Ser',    'eps Ser','Ser','A2m',     3.71,   70.3, 15.8431,  4.4775);
   AS(334,'Mu Ser',         'mu  Ser','Ser','A0IV',    3.54,  170.0, 15.8201, -3.4302);
   AS(335,'Xi Ser',         'xi  Ser','Ser','F0III',   3.54,  105.0, 17.6286,-15.3987);
-  AS(336,'Sabik',          'eta Oph','Oph','A2.5Va',  2.43,   84.0, 17.1729,-15.7250);
+  AS(336,'Maycoba',        'HD32147','Eri','K3V',     6.21,    28.8,  5.0445, -5.7444);
   AS(337,'Yed Prior',      'del Oph','Oph','M0.5III', 2.73,  170.0, 16.2391, -3.6943);
   AS(338,'Yed Posterior',  'eps Oph','Oph','G9.5III', 3.23,  108.0, 16.3017, -4.6925);
   AS(339,'Zeta Oph',       'zet Oph','Oph','O9.5V',   2.54,  366.0, 16.6171,-10.5671);
   AS(340,'Cebalrai',       'bet Oph','Oph','K2III',   2.76,   81.8, 17.7244,  4.5673);
   AS(341,'Gamma Oph',      'gam Oph','Oph','A0III',   3.75,  103.0, 17.7980,  2.7073);
   AS(342,'Kappa Oph',      'kap Oph','Oph','K2III',   3.20,   91.5, 16.9577,  9.3750);
-  AS(343,'Marfik',         'lam Oph','Oph','A1IV',    3.82,  173.0, 16.5095,  1.9839);
+  AS(343,'Tabit',          'pi3 Ori','Ori','F6V',     3.19,    26.3,  4.8302,  6.9613);
   AS(344,'Sinistra',       'nu  Oph','Oph','K0III',   3.32,  153.0, 17.9842, -9.7735);
   AS(345,'Mu Oph',         'mu  Oph','Oph','B8II',    4.62,  749.0, 16.4524, -8.0470);
   AS(346,'Theta Oph',      'tet Oph','Oph','B2IV',    3.27,  563.0, 17.3711,-24.9995);
   AS(347,'Barnard Star',   'V2500 Oph','Oph','M4V',   9.53,    5.96,17.9633,  4.6933);
-  AS(348,'Rasalhague',     'alf Oph','Oph','A5III',   2.08,   48.6, 17.5822, 12.5604);
-  AS(349,'Sargas',         'tet Sco','Sco','F1II',    1.86,  300.0, 17.6219,-42.9978);
-  AS(350,'Antares',        'alf Sco','Sco','M1.5Iab', 1.06,  550.0, 16.4901,-26.4320);
-  AS(351,'Shaula',         'lam Sco','Sco','B1.5IV',  1.62,  700.0, 17.5601,-37.1038);
-  AS(352,'Larawag',        'eps Sco','Sco','K2III',   2.29,   65.0, 16.8361,-34.2932);
+  AS(348,'Beemim',         'ups Eri','Eri','K0III',   3.81,   214.0,  4.5933,-29.7657);
+  AS(349,'Macondo',        'HD93083','Ant','K3V',     8.33,    94.6, 10.7438,-33.6097);
+  AS(350,'Diadem',         'alf Com','Com','F5V',     4.32,    63.0, 13.1671, 17.5293);
+  AS(351,'Tonatiuh',       'HD104985','Cam','G9III',  5.78,   317.0, 12.0844, 76.9069);
+  AS(352,'Tianguan',       'zet Tau','Tau','B1IV',    2.97,   440.0,  5.6275, 21.1425);
   AS(353,'Dschubba',       'del Sco','Sco','B0.3IV',  2.32,  490.0, 16.0055,-22.6217);
   AS(354,'Pi Sco',         'pi  Sco','Sco','B1V',     2.89,  590.0, 15.9805,-26.1141);
   AS(355,'Rho Sco',        'rho Sco','Sco','B2IV',    3.87,  470.0, 15.9168,-29.2143);
@@ -24392,9 +24395,9 @@ Var
   AS(364,'Tau Sco',        'tau Sco','Sco','B0V',     2.82,  470.0, 16.6004,-28.2161);
   AS(365,'Kaus Borealis',  'lam Sgr','Sgr','K1+IIIb', 2.81,   77.3, 18.4663,-25.4217);
   AS(366,'Kaus Media',     'del Sgr','Sgr','K3III',   2.70,  306.0, 18.3499,-29.8281);
-  AS(367,'Kaus Australis', 'eps Sgr','Sgr','B9.5III', 1.85,  145.0, 18.4029,-34.3846);
+  AS(367,'Tegmine',        'zet Cnc','Cnc','F8V',     4.67,    83.4,  8.2056, 17.6479);
   AS(368,'Ascella',        'zet Sgr','Sgr','A2III',   2.59,   89.1, 19.0436,-29.8800);
-  AS(369,'Nunki',          'sig Sgr','Sgr','B2.5V',   2.05,  228.0, 18.9211,-26.2967);
+  AS(369,'Cervantes',      'mu Ara','Ara','G3IV-V',   5.15,    49.8, 17.7372,-51.8341);
   AS(370,'Albaldah',       'pi  Sgr','Sgr','F2II',    2.89,  510.0, 19.1626,-21.0237);
   AS(371,'Polis',          'mu  Sgr','Sgr','B8Iap',   3.84, 3000.0, 18.2294,-21.0586);
   AS(372,'Rukbat',         'alf Sgr','Sgr','B8V',     3.97,  170.0, 19.3982,-40.6157);
@@ -24433,15 +24436,15 @@ Var
   AS(404,'Alpha Pyx',      'alf Pyx','Pyx','B1.5III', 3.68,  845.0,  8.7261,-33.1864);
   AS(405,'Beta Pyx',       'bet Pyx','Pyx','G7Ib-II', 3.97,  388.0,  8.6663,-35.3084);
   AS(406,'Alpha Ant',      'alf Ant','Ant','K4III',   4.25,  365.0, 10.4523,-31.0678);
-  AS(407,'Markeb',         'kap Vel','Vel','B2IV',    2.50,  570.0,  9.3680,-55.0107);
+  AS(407,'Zhang',          'ups1 Hya','Hya','G6III',  4.12,   274.0,  9.8517,-14.8467);
   AS(408,'Alsephina',      'del Vel','Vel','A1V',     1.99,   80.6,  8.7450,-54.7086);
-  AS(409,'Suhail',         'lam Vel','Vel','K4.5Ib',  2.21,  573.0,  9.1330,-43.4326);
-  AS(410,'Regor',          'gam Vel','Vel','WC8+O7.5',1.83, 1000.0,  8.1586,-47.3367);
+  AS(409,'Naledi',         'HD86081','Hya','F8V',     8.71,   320.0,  9.9249, -3.7561);
+  AS(410,'Jishui',         '38 Gem','Gem','F0V',      4.66,    94.0,  6.9059, 13.1782);
   AS(411,'Mu Vel',         'mu  Vel','Vel','G5III',   2.69,  117.0, 10.7779,-49.4203);
   AS(412,'Phi Vel',        'phi Vel','Vel','B5II',    3.52,  1830.0, 9.4488,-54.5685);
   AS(413,'Psi Vel',        'psi Vel','Vel','F0IV',    3.60,   62.7,  9.5125,-40.4669);
   AS(414,'Omicron Vel',    'omi Vel','Vel','B3IV',    3.62,  490.0,  8.6692,-52.9211);
-  AS(415,'Naos',           'zet Pup','Pup','O4If',    2.21, 1080.0,  8.0597,-40.0031);
+  AS(415,'Gudja',          'xi Hya','Hya','G7III',    3.54,   130.0, 11.5499,-31.8576);
   AS(416,'Tureis',         'rho Pup','Pup','F2II',    2.81,   63.5,  8.1259,-24.3043);
   AS(417,'Asmidi',         'omi Pup','Pup','B1IV',    4.49,  1080.0, 7.8000,-25.9374);
   AS(418,'Pi Pup',         'pi  Pup','Pup','K3Ib',    2.71,  810.0,  7.2884,-37.0974);
@@ -24453,7 +24456,7 @@ Var
   AS(424,'Eta CMa',        'eta CMa','CMa','B5Ia',    2.45, 2000.0,  7.4014,-29.3030);
   AS(425,'Delta CMa',      'del CMa','CMa','F8Iab',   1.83, 1600.0,  7.1399,-26.3935);
   AS(426,'Furud',          'zet CMa','CMa','B2.5V',   3.02,  362.0,  6.3338,-30.0634);
-  AS(427,'Mirzam',         'bet CMa','CMa','B1II',    1.98,  500.0,  6.3783,-17.9559);
+  AS(427,'Felis',          'HR3923','Hya','K5III',    4.95,   565.0,  9.9264,-19.9871);
   AS(428,'Muliphein',      'gam CMa','CMa','B8II',    4.11,  402.0,  7.0625,-15.6334);
   AS(429,'Omicron2 CMa',   'omi2 CMa','CMa','B3Ia',   3.04, 2570.0,  7.0497,-23.8334);
   AS(430,'Beta Mon A',     'bet Mon','Mon','B3Ve',    3.76,  691.0,  6.4798, -7.0331);
@@ -24509,7 +24512,7 @@ Var
   AS(480,'Delta Phe',      'del Phe','Phe','K0III',   3.95,  147.0,  1.5273,-49.0728);
   AS(481,'Epsilon Phe',    'eps Phe','Phe','K0III',   3.88,  140.0,  0.4400,-46.7188);
   AS(482,'Zeta Phe',       'zet Phe','Phe','B6V',     3.94,  300.0,  1.1410,-55.2459);
-  AS(483,'Alpha Cae',      'alf Cae','Cae','F2V',     4.45,   65.7,  4.6755,-41.8636);
+  AS(483,'Chamukuy',       'the2 Tau','Tau','A7III',  3.40,   154.0,  4.4778, 15.8704);
   AS(484,'R Lyrae',        'R   Lyr','Lyr','M5III',   4.04,  348.0, 18.9472, 43.9461);
   AS(485,'Beta Boo',       'bet Boo','Boo','G8III',   3.49,  219.0, 15.0322, 40.3905);
   AS(486,'Sigma Lib',      'sig Lib','Lib','M2.5III', 3.29,  292.0, 15.0671,-25.2818);
@@ -24525,12 +24528,20 @@ Var
   AS(496,'Iota Vir',       'iot Vir','Vir','F6III',   4.07,   72.5, 14.2670, -5.9999);
   AS(497,'Khambalia',      'lam Vir','Vir','Am',      4.52,  187.0, 14.3416,-13.3712);
   AS(498,'Mu Vir',         'mu  Vir','Vir','F2III',   3.87,   60.9, 14.7195, -5.6585);
-  AS(499,'Vindemiatrix',   'eps Vir','Vir','G8III',   2.85,  109.6, 13.0362, 10.9591);
+  AS(499,'109 Her',        '109 Her','Her','K2III',   3.84,   124.0, 18.3950, 21.7700);
   AS(500,'Alkes',          'alf Crt','Crt','K1III',   4.07,  174.0, 10.9962,-18.2986);
  End;
 
 Begin
  InitData;
+ { Tri alphabetique par nom (insertion sort) }
+ For SI:=2 To NB_STARS Do Begin
+  Tmp:=SD[SI]; SJ:=SI-1;
+  While (SJ>=1) And (SD[SJ].Nom>Tmp.Nom) Do Begin
+   SD[SJ+1]:=SD[SJ]; Dec(SJ);
+  End;
+  SD[SJ+1]:=Tmp;
+ End;
  DlgR    :=MkRect(8,30,SCREEN_WIDTH-8,SCREEN_HEIGHT-30);
  ListR   :=MkRect(DlgR.X1+8,  DlgR.Y1+24,DlgR.X1+228,DlgR.Y2-44);
  SbR     :=MkRect(ListR.X2-12,ListR.Y1,  ListR.X2,   ListR.Y2);
@@ -24538,7 +24549,7 @@ Begin
  SphR    :=MkRect((DlgR.X1+236+DlgR.X2-8) Div 2 - 16, DlgR.Y2-80,
                   (DlgR.X1+236+DlgR.X2-8) Div 2 + 16, DlgR.Y2-48);
  BtnClose:=MkRect(DlgR.X2-90, DlgR.Y2-34,DlgR.X2-10, DlgR.Y2-10);
- Sel:=1;             { Sirius par defaut }
+ Sel:=1;
  TopIdx:=1;
  VisRows:=(ListR.Y2-ListR.Y1-4) Div 14;
  If VisRows<1 Then VisRows:=1;
@@ -24619,7 +24630,7 @@ Begin
    End;
    OutTextXY(FactR.X1+8,YR,'Couleur stellaire: '+Cstr);
    Inc(YR,18);
-   OutTextXY(FactR.X1+8,YR,'Rang dans le catalogue : '+FmtI(Sel,4));
+   OutTextXY(FactR.X1+8,YR,'Rang dans le catalogue : '+FmtI(SD[Sel].Rank,4));
    { Sphere coloree en bas, centree sous la fiche }
    SetFillStyle(1,Black);
    Bar(SphR.X1-2,SphR.Y1-2,SphR.X2+2,SphR.Y2+2);
