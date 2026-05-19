@@ -5003,6 +5003,7 @@ Const
  ACT_PLUTPHYS  = 67;
  ACT_CLEAR     = 90;
  ACT_SHOW      = 91;
+ ACT_LUNCAL    = 92;  { calendrier lunaire mensuel }
 
 Procedure InitMenus;
 Var I:Integer;
@@ -5175,9 +5176,9 @@ Var BtnY:Integer;
 Begin
  BtnY:=MENUBAR_HEIGHT+4;
  ToolButtons[TI_LUNAR].R:=MkRect(4,BtnY,4+20,BtnY+20);
- ToolButtons[TI_LUNAR].Action:=ACT_PHASES;
+ ToolButtons[TI_LUNAR].Action:=ACT_LUNCAL;
  ToolButtons[TI_LUNAR].IconId:=TI_LUNAR;
- ToolButtons[TI_LUNAR].Hint:='Phases de la Lune';
+ ToolButtons[TI_LUNAR].Hint:='Calendrier lunaire';
 End;
 
 Function ToolbarHitTest(X,Y:LongInt):Integer;
@@ -5311,6 +5312,7 @@ Procedure DoUraPhys; Forward;
 Procedure DoNepPhys; Forward;
 Procedure DoPlutPhys;Forward;
 Procedure DoAbout;   Forward;
+Procedure DoLunarCalendar; Forward;
 
 { -------------------------------------------------------------------------- }
 { DoCal2JD : Conversion date civile -> jour julien (Jrjulien original)      }
@@ -15312,6 +15314,219 @@ Begin
  ResultsShow;
 End;
 
+{ -------------------------------------------------------------------------- }
+{ DoLunarCalendar : Calendrier mensuel avec phases lunaires dessinees.       }
+{ Periode synodique 29.530588853 j ; reference nouvelle lune JD=2451550.1 .  }
+{ -------------------------------------------------------------------------- }
+Procedure DoLunarCalendar;
+Const
+ CDAYS:Array[1..12] Of Integer = (31,28,31,30,31,30,31,31,30,31,30,31);
+ SYNP : Extended = 29.530588853;
+ NEWREF: Extended = 2451550.1;
+Var
+ DlgR,BtnPrev,BtnNext,BtnClose:TRect;
+ Yr,Mn0,Dy,Dw:Word;
+ LcY,LcM:LongInt;
+ TodayY,TodayM,TodayD:LongInt;
+ Done,NeedDraw:Boolean;
+ K:Char;
+ MX,MY,MB,OldMB:LongInt;
+ Row,Col,D,DIM,DOW1:Integer;
+ II:Integer;
+ GX1,GY1,CellW,CellH:Integer;
+ JD,Age:Extended;
+ PhIdx:Integer;
+ TitleS:String;
+
+ Function DaysInMonth(M,Y:LongInt):Integer;
+ Begin
+  If M=2 Then Begin
+   If ((Y Mod 4=0) And (Y Mod 100<>0)) Or (Y Mod 400=0) Then
+    DaysInMonth:=29
+   Else
+    DaysInMonth:=28;
+  End
+  Else
+   DaysInMonth:=CDAYS[M];
+ End;
+
+ Procedure DrawMoonPhase(CX,CY,RR:Integer; Ph:Integer);
+ { Dessine une lune au centre (CX,CY) rayon RR selon la phase Ph (0..7).    }
+ { 0=nouvelle, 2=premier quartier, 4=pleine, 6=dernier quartier.            }
+ Var
+  Pts:Array[0..40] Of PointType;
+  NN,I,Side,Bulge:Integer;
+  Ang:Extended;
+  Rx:Integer;
+ Begin
+  { Cas triviaux : nouvelle et pleine lune. }
+  If Ph=0 Then Begin
+   SetFillStyle(1,8); FillEllipse(CX,CY,RR,RR);
+   SetColor(15); Circle(CX,CY,RR);
+   Exit;
+  End;
+  If Ph=4 Then Begin
+   SetFillStyle(1,14); FillEllipse(CX,CY,RR,RR);
+   SetColor(15); Circle(CX,CY,RR);
+   Exit;
+  End;
+  { Fond sombre puis on construit la region eclairee en polygone jaune. }
+  SetFillStyle(1,8); FillEllipse(CX,CY,RR,RR);
+  { Cote eclaire : +1 = droite (croissant a la jeune lune), -1 = gauche }
+  If Ph<4 Then Side:=1 Else Side:=-1;
+  { Bulge : +1 = terminateur bombe vers le cote eclaire (croissants)
+            -1 = terminateur bombe vers le cote sombre (gibbeuses)
+             0 = terminateur droit (quartiers) }
+  Case Ph Of
+   1,7: Bulge:=1;
+   3,5: Bulge:=-1;
+  Else
+   Bulge:=0;
+  End;
+  Rx:=Round(RR*0.7071);
+  NN:=0;
+  { Arc externe : demi-cercle du cote eclaire, du nord vers le sud. }
+  For I:=0 To 16 Do Begin
+   Ang:=-Pi/2+I*Pi/16;
+   Pts[NN].X:=CX+Side*Round(RR*Cos(Ang));
+   Pts[NN].Y:=CY+Round(RR*Sin(Ang));
+   Inc(NN);
+  End;
+  { Terminateur : retour du sud au nord. }
+  If Bulge=0 Then Begin
+   Pts[NN].X:=CX; Pts[NN].Y:=CY-RR; Inc(NN);
+  End
+  Else Begin
+   For I:=0 To 16 Do Begin
+    Ang:=Pi/2-I*Pi/16;
+    Pts[NN].X:=CX+Side*Bulge*Round(Rx*Cos(Ang));
+    Pts[NN].Y:=CY+Round(RR*Sin(Ang));
+    Inc(NN);
+   End;
+  End;
+  SetFillStyle(1,14); SetColor(14);
+  FillPoly(NN,Pts);
+  SetColor(15); Circle(CX,CY,RR);
+ End;
+
+Begin
+ GetDate(Yr,Mn0,Dy,Dw);
+ LcY:=Yr; LcM:=Mn0;
+ TodayY:=Yr; TodayM:=Mn0; TodayD:=Dy;
+ DlgR:=MkRect(20,30,SCREEN_WIDTH-20,SCREEN_HEIGHT-30);
+ BtnPrev :=MkRect(DlgR.X1+20, DlgR.Y2-30,DlgR.X1+150,DlgR.Y2-8);
+ BtnNext :=MkRect(DlgR.X1+160,DlgR.Y2-30,DlgR.X1+290,DlgR.Y2-8);
+ BtnClose:=MkRect(DlgR.X2-90, DlgR.Y2-30,DlgR.X2-10, DlgR.Y2-8);
+ Done:=False; OldMB:=0; NeedDraw:=True;
+ Repeat
+  If NeedDraw Then Begin
+   HideMouse;
+   TitleS:='Calendrier lunaire - '+mth[LcM]+' '+FmtI(LcY,4);
+   DrawDialogBox(DlgR,TitleS);
+   GX1:=DlgR.X1+8;
+   GY1:=DlgR.Y1+28;
+   CellW:=(DlgR.X2-DlgR.X1-16) Div 7;
+   CellH:=(DlgR.Y2-DlgR.Y1-28-50) Div 6;
+   { Bandeau des jours de la semaine. }
+   SetFillStyle(1,CLR_TITLE_BG);
+   Bar(GX1,GY1,GX1+CellW*7,GY1+18);
+   SetColor(CLR_TITLE_FG);
+   For II:=0 To 6 Do
+    OutTextXY(GX1+II*CellW+(CellW-24) Div 2,GY1+5,Copy(sem[II],1,3));
+   GY1:=GY1+18;
+   { Jour de la semaine du 1er du mois. }
+   JD:=jj(1,LcM,LcY,12,0,0);
+   DOW1:=Trunc(JD+1.5) Mod 7;
+   If DOW1<0 Then DOW1:=DOW1+7;
+   DIM:=DaysInMonth(LcM,LcY);
+   D:=1;
+   For Row:=0 To 5 Do
+    For Col:=0 To 6 Do Begin
+     SetColor(CLR_DLG_FRAME);
+     Rectangle(GX1+Col*CellW,GY1+Row*CellH,
+               GX1+(Col+1)*CellW,GY1+(Row+1)*CellH);
+     If ((Row=0) And (Col<DOW1)) Or (D>DIM) Then Begin
+      SetFillStyle(1,7);
+      Bar(GX1+Col*CellW+1,GY1+Row*CellH+1,
+          GX1+(Col+1)*CellW-1,GY1+(Row+1)*CellH-1);
+     End
+     Else Begin
+      SetFillStyle(1,CLR_DLG_BG);
+      Bar(GX1+Col*CellW+1,GY1+Row*CellH+1,
+          GX1+(Col+1)*CellW-1,GY1+(Row+1)*CellH-1);
+      If (LcY=TodayY) And (LcM=TodayM) And (D=TodayD) Then
+       SetColor(CLR_BTN_FOCUS)
+      Else
+       SetColor(CLR_FG);
+      OutTextXY(GX1+Col*CellW+4,GY1+Row*CellH+3,FmtI(D,1));
+      { Phase a 0h TU du jour considere. }
+      JD:=jj(D,LcM,LcY,0,0,0);
+      Age:=JD-NEWREF;
+      Age:=Age-SYNP*Int(Age/SYNP);
+      If Age<0 Then Age:=Age+SYNP;
+      PhIdx:=Trunc(Age/SYNP*8.0+0.5) Mod 8;
+      DrawMoonPhase(GX1+Col*CellW+CellW Div 2,
+                    GY1+Row*CellH+CellH Div 2+6,12,PhIdx);
+      Inc(D);
+     End;
+    End;
+   { Legende sous la grille. }
+   SetColor(CLR_FG);
+   OutTextXY(DlgR.X1+8,DlgR.Y2-46,
+    'PgUp/PgDn=mois precedent/suivant   Esc=fermer');
+   DrawButton(BtnPrev,'Mois precedent',False);
+   DrawButton(BtnNext,'Mois suivant',False);
+   DrawButton(BtnClose,'Fermer',True);
+   ShowMouse;
+   NeedDraw:=False;
+  End;
+  If KeyPressed Then Begin
+   K:=ReadKey;
+   If K=#0 Then Begin
+    K:=ReadKey;
+    Case K Of
+     #73,#75: Begin                                       { PgUp / Gauche }
+      LcM:=LcM-1;
+      If LcM<1 Then Begin LcM:=12; LcY:=LcY-1; End;
+      NeedDraw:=True;
+     End;
+     #81,#77: Begin                                       { PgDn / Droite }
+      LcM:=LcM+1;
+      If LcM>12 Then Begin LcM:=1; LcY:=LcY+1; End;
+      NeedDraw:=True;
+     End;
+     #71: Begin                                            { Home : mois courant }
+      LcY:=TodayY; LcM:=TodayM; NeedDraw:=True;
+     End;
+     #107: Done:=True;                                      { Alt+F4 }
+    End;
+   End
+   Else Begin
+    If K=#27 Then Done:=True;
+    If (K=#13) Or (K=' ') Then Done:=True;
+   End;
+  End;
+  If HasMouse Then Begin
+   ReadMouse(MX,MY,MB);
+   If (MB=1) And (OldMB=0) Then Begin
+    If PtInRect(MX,MY,BtnClose) Then Done:=True
+    Else If PtInRect(MX,MY,BtnPrev) Then Begin
+     LcM:=LcM-1;
+     If LcM<1 Then Begin LcM:=12; LcY:=LcY-1; End;
+     NeedDraw:=True;
+    End
+    Else If PtInRect(MX,MY,BtnNext) Then Begin
+     LcM:=LcM+1;
+     If LcM>12 Then Begin LcM:=1; LcY:=LcY+1; End;
+     NeedDraw:=True;
+    End;
+   End;
+   OldMB:=MB;
+  End;
+  Delay(15);
+ Until Done;
+End;
+
 Procedure DoLeCouMer;
 { Lever, coucher, passage au meridien d'un astre quelconque (AD+Dec).
   Source verbatim : BIBLIL.PAS, procedure LeCouMer, branche "autres astres".
@@ -18379,6 +18594,7 @@ Begin
   ACT_URAPHYS:    DoUraPhys;
   ACT_NEPPHYS:    DoNepPhys;
   ACT_PLUTPHYS:   DoPlutPhys;
+  ACT_LUNCAL:     DoLunarCalendar;
  End;
  NeedRedraw:=True;
 End;
