@@ -4609,18 +4609,67 @@ Begin
 End;
 
 Procedure ShowMessage(Const Title,Msg:String);
+Const
+ MAX_LINES = 20;
+ MAX_COLS  = 40;     { 360px utiles / 8px par char }
+ CHAR_W    = 8;
+ LINE_H    = 10;
 Var
  DlgR,BtnOK:TRect;
  K:Char;
  Done:Boolean;
  MX,MY,MB,OldMB:LongInt;
+ Lines:Array[1..MAX_LINES] Of String;
+ NLines,I,P,L,LastSp:Integer;
+ Rest,Cur:String;
+ H,DlgW,DlgH,Cx:Integer;
 Begin
- DlgR:=MkRect(140,160,500,290);
- BtnOK:=MkRect(DlgR.X1+130,DlgR.Y2-40,DlgR.X1+230,DlgR.Y2-15);
+ { Decoupage en lignes : retour a la ligne sur dernier espace avant MAX_COLS,
+   ou coupe brute si pas d'espace. Sauts de ligne explicites (#13 ou #10)
+   respectes. }
+ NLines:=0;
+ Rest:=Msg;
+ While (NLines<MAX_LINES) And (Length(Rest)>0) Do Begin
+  { Couper sur saut de ligne explicite si present avant MAX_COLS. }
+  P:=0;
+  For I:=1 To Length(Rest) Do
+   If (Rest[I]=#13) Or (Rest[I]=#10) Then Begin P:=I; Break; End;
+  If (P>0) And (P<=MAX_COLS+1) Then Begin
+   Cur:=Copy(Rest,1,P-1);
+   Delete(Rest,1,P);
+   If (Length(Rest)>0) And ((Rest[1]=#10) Or (Rest[1]=#13)) Then
+    Delete(Rest,1,1);
+  End
+  Else If Length(Rest)<=MAX_COLS Then Begin
+   Cur:=Rest; Rest:='';
+  End
+  Else Begin
+   LastSp:=0;
+   For I:=1 To MAX_COLS Do
+    If Rest[I]=' ' Then LastSp:=I;
+   If LastSp=0 Then L:=MAX_COLS Else L:=LastSp-1;
+   Cur:=Copy(Rest,1,L);
+   Delete(Rest,1,L);
+   While (Length(Rest)>0) And (Rest[1]=' ') Do Delete(Rest,1,1);
+  End;
+  Inc(NLines); Lines[NLines]:=Cur;
+ End;
+ If NLines=0 Then Begin NLines:=1; Lines[1]:=''; End;
+ { Dimensionnement dynamique. }
+ DlgW:=360;
+ DlgH:=45 + NLines*LINE_H + 50;   { 45 entete + N*ligne + 50 bouton/marge }
+ If DlgH<130 Then DlgH:=130;
+ Cx:=SCREEN_WIDTH Div 2;
+ H:=SCREEN_HEIGHT Div 2;
+ DlgR:=MkRect(Cx-DlgW Div 2,H-DlgH Div 2,
+              Cx+DlgW Div 2,H+DlgH Div 2);
+ BtnOK:=MkRect(DlgR.X1+(DlgW-100) Div 2,DlgR.Y2-40,
+               DlgR.X1+(DlgW-100) Div 2+100,DlgR.Y2-15);
  HideMouse;
  DrawDialogBox(DlgR,Title);
  SetColor(CLR_FG);
- OutTextXY(DlgR.X1+20,DlgR.Y1+45,Msg);
+ For I:=1 To NLines Do
+  OutTextXY(DlgR.X1+20,DlgR.Y1+40+(I-1)*LINE_H,Lines[I]);
  DrawButton(BtnOK,'OK',True);
  ShowMouse;
  Done:=False; OldMB:=0;
