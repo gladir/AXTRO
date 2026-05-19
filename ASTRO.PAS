@@ -168,12 +168,13 @@ Const
  STATUSBAR_HEIGHT= 20;
  NUM_MENUS       = 7;
  MAX_MENU_ITEMS  = 18;
- NUM_TOOLS       = 5;
+ NUM_TOOLS       = 6;
  TI_LUNAR        = 0;
  TI_SOLAR        = 1;
  TI_COMET        = 2;
  TI_GALAXY       = 3;
  TI_PLANETS      = 4;
+ TI_CONSTEL      = 5;
 
  { Couleurs (palette EGA/VGA 16) }
  CLR_BG          = 7;   { LightGray }
@@ -5007,6 +5008,7 @@ Const
  ACT_COMETV    = 94;  { visualisation des cometes }
  ACT_GALAXY    = 95;  { visualisation de la Voie Lactee }
  ACT_PLANETS   = 96;  { fiche des planetes }
+ ACT_CONSTEL   = 97;  { catalogue des 88 constellations IAU }
 
 Procedure InitMenus;
 Var I:Integer;
@@ -5071,6 +5073,8 @@ Begin
  MI(MNU_PHENO,'Reduction Pluton',ACT_PLUTPHYS);
 
  Menus[MNU_AIDE].Caption:='Aide';
+ MI(MNU_PHENO,'Constellations (88 IAU)',ACT_CONSTEL);
+
  MI(MNU_AIDE,'A propos...',ACT_ABOUT);
 End;
 
@@ -5219,6 +5223,30 @@ Begin
  FillEllipse(X+10,Y+10,3,2);
 End;
 
+{ Icone constellations : sept etoiles formant Grande Ourse stylisee 20x20. }
+Procedure DrawConstelIcon(X,Y:Integer);
+Const
+ CX:Array[1..7] Of Integer = (4, 7,10,13,15,12,10);
+ CY:Array[1..7] Of Integer = (5, 4, 6, 7,11,14,15);
+Var I:Integer;
+Begin
+ SetFillStyle(1,Black);
+ Bar(X+2,Y+2,X+18,Y+18);
+ { Segments du Grand Chariot }
+ SetColor(LightGray);
+ For I:=1 To 6 Do
+  Line(X+CX[I],Y+CY[I],X+CX[I+1],Y+CY[I+1]);
+ { Etoiles }
+ SetColor(White);
+ For I:=1 To 7 Do Begin
+  PutPixel(X+CX[I],   Y+CY[I],   White);
+  PutPixel(X+CX[I]+1, Y+CY[I],   White);
+  PutPixel(X+CX[I],   Y+CY[I]+1, White);
+  PutPixel(X+CX[I]-1, Y+CY[I],   White);
+  PutPixel(X+CX[I],   Y+CY[I]-1, White);
+ End;
+End;
+
 { Icone planetes : une planete + anneau (saturne stylise) 20x20. }
 Procedure DrawPlanetsIcon(X,Y:Integer);
 Begin
@@ -5251,6 +5279,7 @@ Begin
   TI_COMET:  DrawCometIcon(R.X1,R.Y1);
   TI_GALAXY: DrawGalaxyIcon(R.X1,R.Y1);
   TI_PLANETS:DrawPlanetsIcon(R.X1,R.Y1);
+  TI_CONSTEL:DrawConstelIcon(R.X1,R.Y1);
  End;
 End;
 
@@ -5289,6 +5318,10 @@ Begin
  ToolButtons[TI_PLANETS].Action:=ACT_PLANETS;
  ToolButtons[TI_PLANETS].IconId:=TI_PLANETS;
  ToolButtons[TI_PLANETS].Hint:='Planetes';
+ ToolButtons[TI_CONSTEL].R:=MkRect(124,BtnY,124+20,BtnY+20);
+ ToolButtons[TI_CONSTEL].Action:=ACT_CONSTEL;
+ ToolButtons[TI_CONSTEL].IconId:=TI_CONSTEL;
+ ToolButtons[TI_CONSTEL].Hint:='Constellations';
 End;
 
 Function ToolbarHitTest(X,Y:LongInt):Integer;
@@ -5432,6 +5465,7 @@ Procedure DoSolarSystem;   Forward;
 Procedure DoComets;        Forward;
 Procedure DoGalaxy;        Forward;
 Procedure DoPlanets;       Forward;
+Procedure DoConstellations;Forward;
 
 { -------------------------------------------------------------------------- }
 { DoCal2JD : Conversion date civile -> jour julien (Jrjulien original)      }
@@ -22980,6 +23014,890 @@ Begin
  Until Done;
 End;
 
+{ =====================================================================
+  DoConstellations : catalogue des 88 constellations reconnues par l'UAI
+  - Liste a gauche avec scrollbar (clavier+souris)
+  - Fiche technique au centre
+  - Dessin vectoriel 128x128 a droite (polygones/segments, pas de bitmap)
+  ===================================================================== }
+Procedure DoConstellations;
+Const
+ NB_CONST = 88;
+ MAX_PTS  = 16;
+ MAX_LN   = 20;
+Type
+ TCPt = Record X,Y,Mag:Byte End;
+ TCLn = Record A,B:Byte End;
+ TConstRec = Record
+  Nom      : String[20];
+  NomFr    : String[26];
+  Abrev    : String[3];
+  Genitif  : String[18];
+  Famille  : String[20];
+  Etoile   : String[16];
+  Saison   : String[14];
+  Surface  : Integer;
+  MagPrinc : Real;
+  ADh      : Real;
+  DecDeg   : Real;
+  Hemisp   : Char;
+  NPts     : Byte;
+  Pts      : Array[1..MAX_PTS] Of TCPt;
+  NLines   : Byte;
+  Lines    : Array[1..MAX_LN] Of TCLn;
+ End;
+Var
+ CD : Array[1..NB_CONST] Of TConstRec;
+ DlgR,ListR,SbR,SbThumb,FactR,ImgR,BtnClose : TRect;
+ Sel,TopIdx,VisRows : Integer;
+ Done,NeedDraw : Boolean;
+ MX,MY,MB,OldMB : LongInt;
+ K : Char;
+ J,IY,YR,ThumbY,ThumbH,A,B,Rr : Integer;
+ Yline : Integer;
+ Cstr : String;
+
+ Procedure Def(I:Integer; Nm,NmF,Ab,Gn,Fm,Et,Sn:String;
+               Sf:Integer; Mg,Ah,Dc:Real; Hm:Char);
+ Begin
+  CD[I].Nom:=Nm; CD[I].NomFr:=NmF; CD[I].Abrev:=Ab; CD[I].Genitif:=Gn;
+  CD[I].Famille:=Fm; CD[I].Etoile:=Et; CD[I].Saison:=Sn;
+  CD[I].Surface:=Sf; CD[I].MagPrinc:=Mg; CD[I].ADh:=Ah; CD[I].DecDeg:=Dc;
+  CD[I].Hemisp:=Hm; CD[I].NPts:=0; CD[I].NLines:=0;
+ End;
+
+ Procedure AP(I:Integer; X,Y,M:Byte);
+ Begin
+  Inc(CD[I].NPts);
+  CD[I].Pts[CD[I].NPts].X:=X;
+  CD[I].Pts[CD[I].NPts].Y:=Y;
+  CD[I].Pts[CD[I].NPts].Mag:=M;
+ End;
+
+ Procedure AL(I:Integer; Aa,Bb:Byte);
+ Begin
+  Inc(CD[I].NLines);
+  CD[I].Lines[CD[I].NLines].A:=Aa;
+  CD[I].Lines[CD[I].NLines].B:=Bb;
+ End;
+
+ Procedure InitData;
+ Begin
+  { 1 Andromeda - chaine d'etoiles }
+  Def(1,'Andromeda','Andromede','And','Andromedae','Persee',
+      'Alpheratz','Automne',722,2.06,0.8,38.0,'N');
+  AP(1, 16, 80, 2); AP(1, 38, 72, 3); AP(1, 58, 64, 2);
+  AP(1, 80, 56, 2); AP(1,100, 48, 2); AP(1,112, 30, 3);
+  AP(1, 60, 44, 4); AP(1, 80, 38, 4);
+  AL(1,1,2); AL(1,2,3); AL(1,3,4); AL(1,4,5); AL(1,5,6);
+  AL(1,3,7); AL(1,4,8);
+
+  { 2 Antlia - triangle ouvert }
+  Def(2,'Antlia','Machine pneumatique','Ant','Antliae','La Caille',
+      'Alpha Antliae','Inv.boreal',239,4.25,10.3,-35.0,'S');
+  AP(2, 32, 88, 4); AP(2, 64, 60, 4); AP(2, 96, 92, 4);
+  AL(2,1,2); AL(2,2,3);
+
+  { 3 Apus - oiseau de paradis }
+  Def(3,'Apus','Oiseau de paradis','Aps','Apodis','Bayer',
+      'Alpha Apodis','Inv.boreal',206,3.83,16.0,-75.0,'S');
+  AP(3, 40, 60, 4); AP(3, 72, 48, 4); AP(3, 88, 76, 4); AP(3, 60, 92, 5);
+  AL(3,1,2); AL(3,2,3); AL(3,3,4); AL(3,4,1);
+
+  { 4 Aquarius - cruche en Y }
+  Def(4,'Aquarius','Verseau','Aqr','Aquarii','Zodiaque',
+      'Sadalsuud','Automne',980,2.91,22.3,-10.0,'E');
+  AP(4, 30, 40, 3); AP(4, 56, 44, 3); AP(4, 80, 40, 3); AP(4, 70, 64, 3);
+  AP(4, 60, 84, 4); AP(4, 84, 92, 4); AP(4, 96, 80, 4); AP(4,108, 96, 4);
+  AL(4,1,2); AL(4,2,3); AL(4,2,4); AL(4,4,5); AL(4,4,6); AL(4,6,7); AL(4,6,8);
+
+  { 5 Aquila - aigle }
+  Def(5,'Aquila','Aigle','Aql','Aquilae','Hercule',
+      'Altair','Ete',652,0.77,19.7,3.0,'E');
+  AP(5, 28, 56, 4); AP(5, 56, 60, 2); AP(5, 64, 52, 1); AP(5, 70, 68, 3);
+  AP(5, 88, 76, 4); AP(5,100, 56, 4);
+  AL(5,1,2); AL(5,2,3); AL(5,3,4); AL(5,4,5); AL(5,3,6);
+
+  { 6 Ara - autel }
+  Def(6,'Ara','Autel','Ara','Arae','Hercule',
+      'Beta Arae','Inv.boreal',237,2.85,17.5,-55.0,'S');
+  AP(6, 36, 36, 4); AP(6, 80, 32, 3); AP(6, 92, 56, 3); AP(6, 48, 64, 3);
+  AP(6, 64, 88, 4);
+  AL(6,1,2); AL(6,2,3); AL(6,3,4); AL(6,4,1); AL(6,4,5);
+
+  { 7 Aries - belier }
+  Def(7,'Aries','Belier','Ari','Arietis','Zodiaque',
+      'Hamal','Automne',441,2.0,2.6,20.0,'N');
+  AP(7, 24, 84, 2); AP(7, 48, 60, 2); AP(7, 80, 56, 4); AP(7,100, 72, 5);
+  AL(7,1,2); AL(7,2,3); AL(7,3,4);
+
+  { 8 Auriga - cocher (pentagone) }
+  Def(8,'Auriga','Cocher','Aur','Aurigae','Persee',
+      'Capella','Hiver',657,0.08,6.0,42.0,'N');
+  AP(8, 28, 32, 1); AP(8, 60, 24, 2); AP(8, 96, 48, 3);
+  AP(8, 88, 92, 3); AP(8, 24, 80, 3);
+  AL(8,1,2); AL(8,2,3); AL(8,3,4); AL(8,4,5); AL(8,5,1);
+
+  { 9 Bootes - cerf-volant }
+  Def(9,'Bootes','Bouvier','Boo','Bootis','Ursa Major',
+      'Arcturus','Printemps',907,-0.05,14.7,30.0,'N');
+  AP(9, 60, 90, 1); AP(9, 40, 64, 3); AP(9, 80, 60, 3); AP(9, 60, 40, 4);
+  AP(9, 28, 28, 3); AP(9, 92, 32, 4);
+  AL(9,1,2); AL(9,1,3); AL(9,2,4); AL(9,3,4); AL(9,4,5); AL(9,4,6);
+
+  { 10 Caelum - burin }
+  Def(10,'Caelum','Burin','Cae','Caeli','La Caille',
+      'Alpha Caeli','Inv.boreal',125,4.45,4.7,-38.0,'S');
+  AP(10, 40, 36, 4); AP(10, 64, 64, 5); AP(10, 88, 92, 4);
+  AL(10,1,2); AL(10,2,3);
+
+  { 11 Camelopardalis - girafe (zigzag) }
+  Def(11,'Camelopardalis','Girafe','Cam','Camelopardalis','Ursa Major',
+      'Beta Cam.','Toutes',757,4.03,8.7,70.0,'N');
+  AP(11, 20, 80, 4); AP(11, 40, 60, 4); AP(11, 64, 76, 4);
+  AP(11, 84, 56, 4); AP(11,108, 72, 5);
+  AL(11,1,2); AL(11,2,3); AL(11,3,4); AL(11,4,5);
+
+  { 12 Cancer - crabe (Y) }
+  Def(12,'Cancer','Cancer','Cnc','Cancri','Zodiaque',
+      'Tarf','Printemps',506,3.5,8.5,20.0,'N');
+  AP(12, 64, 40, 4); AP(12, 60, 64, 4); AP(12, 24, 56, 4);
+  AP(12, 96, 60, 4); AP(12, 56, 92, 4);
+  AL(12,1,2); AL(12,2,3); AL(12,2,4); AL(12,2,5);
+
+  { 13 Canes Venatici - chiens de chasse }
+  Def(13,'Canes Venatici','Chiens de chasse','CVn','Canum Venaticorum','Ursa Major',
+      'Cor Caroli','Printemps',465,2.9,13.1,40.0,'N');
+  AP(13, 48, 64, 3); AP(13, 84, 48, 4);
+  AL(13,1,2);
+
+  { 14 Canis Major - grand chien }
+  Def(14,'Canis Major','Grand chien','CMa','Canis Majoris','Orion',
+      'Sirius','Hiver',380,-1.46,6.8,-22.0,'E');
+  AP(14, 56, 56, 1); AP(14, 28, 44, 3); AP(14, 36, 80, 3);
+  AP(14, 76, 84, 3); AP(14, 96, 60, 3); AP(14, 72, 36, 4);
+  AL(14,1,2); AL(14,1,3); AL(14,1,4); AL(14,4,5); AL(14,1,6);
+
+  { 15 Canis Minor - petit chien }
+  Def(15,'Canis Minor','Petit chien','CMi','Canis Minoris','Orion',
+      'Procyon','Hiver',183,0.34,7.5,6.0,'E');
+  AP(15, 40, 80, 1); AP(15, 96, 48, 3);
+  AL(15,1,2);
+
+  { 16 Capricornus - chevre de mer }
+  Def(16,'Capricornus','Capricorne','Cap','Capricorni','Zodiaque',
+      'Deneb Algedi','Automne',414,2.85,21.0,-20.0,'S');
+  AP(16, 16, 48, 3); AP(16, 32, 40, 3); AP(16, 60, 60, 4);
+  AP(16, 84, 76, 4); AP(16,104, 60, 3); AP(16, 96, 36, 3);
+  AL(16,1,2); AL(16,2,3); AL(16,3,4); AL(16,4,5); AL(16,5,6); AL(16,6,1);
+
+  { 17 Carina - carene }
+  Def(17,'Carina','Carene','Car','Carinae','Eaux celestes',
+      'Canopus','Inv.boreal',494,-0.74,8.0,-60.0,'S');
+  AP(17, 16, 32, 1); AP(17, 40, 56, 2); AP(17, 64, 64, 2);
+  AP(17, 88, 76, 2); AP(17,108, 84, 2); AP(17, 48, 88, 3);
+  AL(17,1,2); AL(17,2,3); AL(17,3,4); AL(17,4,5); AL(17,3,6);
+
+  { 18 Cassiopeia - W }
+  Def(18,'Cassiopeia','Cassiopee','Cas','Cassiopeiae','Persee',
+      'Schedar','Toutes',598,2.24,1.0,62.0,'N');
+  AP(18, 16, 48, 2); AP(18, 40, 80, 2); AP(18, 64, 48, 2);
+  AP(18, 88, 80, 2); AP(18,112, 48, 3);
+  AL(18,1,2); AL(18,2,3); AL(18,3,4); AL(18,4,5);
+
+  { 19 Centaurus - centaure }
+  Def(19,'Centaurus','Centaure','Cen','Centauri','Hercule',
+      'Rigil Kentaurus','Inv.boreal',1060,-0.27,13.5,-50.0,'S');
+  AP(19, 28, 96, 1); AP(19, 40, 88, 1); AP(19, 60, 76, 2);
+  AP(19, 76, 60, 2); AP(19, 88, 44, 3); AP(19, 96, 72, 3);
+  AP(19, 56, 40, 3); AP(19, 36, 32, 4); AP(19,104, 96, 3);
+  AL(19,1,2); AL(19,2,3); AL(19,3,4); AL(19,4,5); AL(19,4,6);
+  AL(19,3,7); AL(19,7,8); AL(19,6,9);
+
+  { 20 Cepheus - maison }
+  Def(20,'Cepheus','Cephee','Cep','Cephei','Persee',
+      'Alderamin','Toutes',588,2.45,22.0,71.0,'N');
+  AP(20, 32, 88, 2); AP(20, 32, 56, 3); AP(20, 64, 32, 3);
+  AP(20, 96, 56, 3); AP(20, 96, 88, 3);
+  AL(20,1,2); AL(20,2,3); AL(20,3,4); AL(20,4,5); AL(20,5,1);
+
+  { 21 Cetus - baleine }
+  Def(21,'Cetus','Baleine','Cet','Ceti','Persee',
+      'Diphda','Automne',1231,2.04,2.0,-10.0,'E');
+  AP(21, 12, 64, 2); AP(21, 32, 56, 4); AP(21, 52, 48, 3);
+  AP(21, 76, 60, 3); AP(21, 92, 80, 3); AP(21,108, 72, 2); AP(21,100, 92, 4);
+  AL(21,1,2); AL(21,2,3); AL(21,3,4); AL(21,4,5); AL(21,5,6); AL(21,5,7);
+
+  { 22 Chamaeleon - cameleon }
+  Def(22,'Chamaeleon','Cameleon','Cha','Chamaeleontis','Bayer',
+      'Alpha Cha.','Inv.boreal',132,4.07,11.0,-80.0,'S');
+  AP(22, 32, 56, 4); AP(22, 60, 40, 4); AP(22, 96, 60, 4); AP(22, 64, 88, 4);
+  AL(22,1,2); AL(22,2,3); AL(22,3,4); AL(22,4,1);
+
+  { 23 Circinus - compas }
+  Def(23,'Circinus','Compas','Cir','Circini','La Caille',
+      'Alpha Cir.','Inv.boreal',93,3.18,15.0,-65.0,'S');
+  AP(23, 32, 88, 3); AP(23, 64, 40, 4); AP(23, 96, 80, 4);
+  AL(23,1,2); AL(23,2,3);
+
+  { 24 Columba - colombe }
+  Def(24,'Columba','Colombe','Col','Columbae','Eaux celestes',
+      'Phact','Hiver',270,2.65,5.7,-35.0,'S');
+  AP(24, 24, 72, 2); AP(24, 56, 56, 3); AP(24, 80, 76, 3); AP(24,104, 64, 4);
+  AL(24,1,2); AL(24,2,3); AL(24,3,4);
+
+  { 25 Coma Berenices - chevelure de Berenice }
+  Def(25,'Coma Berenices','Chevelure de Berenice','Com','Comae Berenices','Ursa Major',
+      'Beta Comae','Printemps',386,4.26,12.8,22.0,'N');
+  AP(25, 32, 56, 4); AP(25, 64, 48, 4); AP(25, 96, 80, 4);
+  AL(25,1,2); AL(25,2,3);
+
+  { 26 Corona Australis - couronne australe }
+  Def(26,'Corona Australis','Couronne australe','CrA','Coronae Australis','Hercule',
+      'Alpha CrA','Ete',128,4.11,18.6,-40.0,'S');
+  AP(26, 20, 60, 4); AP(26, 36, 44, 4); AP(26, 60, 36, 4);
+  AP(26, 84, 44, 4); AP(26,104, 60, 4);
+  AL(26,1,2); AL(26,2,3); AL(26,3,4); AL(26,4,5);
+
+  { 27 Corona Borealis - couronne boreale }
+  Def(27,'Corona Borealis','Couronne boreale','CrB','Coronae Borealis','Ursa Major',
+      'Alphecca','Ete',179,2.22,15.8,27.0,'N');
+  AP(27, 16, 76, 4); AP(27, 30, 56, 4); AP(27, 50, 44, 3);
+  AP(27, 64, 38, 2); AP(27, 80, 44, 4); AP(27,100, 56, 4); AP(27,112, 76, 4);
+  AL(27,1,2); AL(27,2,3); AL(27,3,4); AL(27,4,5); AL(27,5,6); AL(27,6,7);
+
+  { 28 Corvus - corbeau }
+  Def(28,'Corvus','Corbeau','Crv','Corvi','Hercule',
+      'Gienah','Printemps',184,2.59,12.5,-20.0,'S');
+  AP(28, 32, 40, 3); AP(28, 88, 40, 3); AP(28, 96, 80, 3);
+  AP(28, 40, 88, 3); AP(28, 16, 64, 4);
+  AL(28,1,2); AL(28,2,3); AL(28,3,4); AL(28,4,1); AL(28,1,5);
+
+  { 29 Crater - coupe }
+  Def(29,'Crater','Coupe','Crt','Crateris','Hercule',
+      'Delta Crateris','Printemps',282,3.56,11.4,-15.0,'S');
+  AP(29, 24, 56, 4); AP(29, 48, 40, 4); AP(29, 80, 40, 4);
+  AP(29,104, 56, 4); AP(29, 60, 88, 4); AP(29, 84, 88, 4);
+  AL(29,1,2); AL(29,2,3); AL(29,3,4); AL(29,4,6); AL(29,1,5); AL(29,5,6);
+
+  { 30 Crux - croix du sud }
+  Def(30,'Crux','Croix du Sud','Cru','Crucis','Hercule',
+      'Acrux','Inv.boreal',68,0.77,12.5,-60.0,'S');
+  AP(30, 64, 24, 1); AP(30, 64,104, 1); AP(30, 24, 64, 2); AP(30,104, 64, 2);
+  AL(30,1,2); AL(30,3,4);
+
+  { 31 Cygnus - cygne / croix nordique }
+  Def(31,'Cygnus','Cygne','Cyg','Cygni','Hercule',
+      'Deneb','Ete',804,1.25,20.7,40.0,'N');
+  AP(31, 64, 16, 1); AP(31, 64, 48, 3); AP(31, 64, 96, 3);
+  AP(31, 24, 56, 3); AP(31,104, 56, 3); AP(31, 20, 32, 4); AP(31,108, 80, 4);
+  AL(31,1,2); AL(31,2,3); AL(31,4,2); AL(31,2,5); AL(31,4,6); AL(31,5,7);
+
+  { 32 Delphinus - dauphin (diamant + tete) }
+  Def(32,'Delphinus','Dauphin','Del','Delphini','Eaux celestes',
+      'Rotanev','Ete',189,3.63,20.7,12.0,'N');
+  AP(32, 56, 40, 4); AP(32, 80, 56, 3); AP(32, 64, 72, 3);
+  AP(32, 44, 60, 3); AP(32, 28, 88, 4);
+  AL(32,1,2); AL(32,2,3); AL(32,3,4); AL(32,4,1); AL(32,3,5);
+
+  { 33 Dorado - dorade }
+  Def(33,'Dorado','Poisson dore','Dor','Doradus','Bayer',
+      'Alpha Doradus','Inv.boreal',179,3.27,5.2,-58.0,'S');
+  AP(33, 24, 40, 3); AP(33, 56, 56, 4); AP(33, 88, 72, 4); AP(33,104, 92, 5);
+  AL(33,1,2); AL(33,2,3); AL(33,3,4);
+
+  { 34 Draco - dragon }
+  Def(34,'Draco','Dragon','Dra','Draconis','Ursa Major',
+      'Eltanin','Toutes',1083,2.24,15.0,65.0,'N');
+  AP(34, 16, 96, 3); AP(34, 28, 80, 4); AP(34, 48, 80, 4);
+  AP(34, 68, 64, 4); AP(34, 84, 48, 3); AP(34, 96, 32, 2);
+  AP(34, 88, 16, 3); AP(34, 64, 24, 3); AP(34, 60, 40, 4);
+  AL(34,1,2); AL(34,2,3); AL(34,3,4); AL(34,4,5); AL(34,5,6);
+  AL(34,6,7); AL(34,7,8); AL(34,8,9); AL(34,9,5);
+
+  { 35 Equuleus - petit cheval }
+  Def(35,'Equuleus','Petit cheval','Equ','Equulei','Eaux celestes',
+      'Kitalpha','Automne',72,3.92,21.2,8.0,'N');
+  AP(35, 32, 56, 4); AP(35, 60, 48, 4); AP(35, 88, 56, 4); AP(35, 64, 80, 4);
+  AL(35,1,2); AL(35,2,3); AL(35,3,4); AL(35,4,1);
+
+  { 36 Eridanus - fleuve (long meandre) }
+  Def(36,'Eridanus','Eridan','Eri','Eridani','Eaux celestes',
+      'Achernar','Hiver',1138,0.46,3.3,-30.0,'S');
+  AP(36, 16,104, 1); AP(36, 32, 88, 3); AP(36, 48, 96, 4);
+  AP(36, 60, 80, 4); AP(36, 76, 88, 4); AP(36, 88, 72, 3);
+  AP(36,100, 80, 4); AP(36,108, 56, 3); AP(36, 96, 40, 3);
+  AP(36, 80, 48, 3); AP(36, 60, 36, 3); AP(36, 44, 28, 3); AP(36, 24, 20, 3);
+  AL(36,1,2); AL(36,2,3); AL(36,3,4); AL(36,4,5); AL(36,5,6);
+  AL(36,6,7); AL(36,7,8); AL(36,8,9); AL(36,9,10); AL(36,10,11);
+  AL(36,11,12); AL(36,12,13);
+
+  { 37 Fornax - fourneau }
+  Def(37,'Fornax','Fourneau','For','Fornacis','La Caille',
+      'Alpha Fornacis','Automne',398,3.85,2.8,-32.0,'S');
+  AP(37, 32, 80, 4); AP(37, 60, 56, 4); AP(37, 96, 40, 4);
+  AL(37,1,2); AL(37,2,3);
+
+  { 38 Gemini - gemeaux (jumeaux) }
+  Def(38,'Gemini','Gemeaux','Gem','Geminorum','Zodiaque',
+      'Pollux','Hiver',514,1.14,7.0,22.0,'N');
+  AP(38, 96, 24, 1); AP(38, 80, 32, 2); AP(38, 60, 48, 3);
+  AP(38, 40, 64, 3); AP(38, 24, 88, 3); AP(38, 96, 40, 3);
+  AP(38, 76, 56, 3); AP(38, 56, 72, 3); AP(38, 40, 96, 3);
+  AL(38,1,2); AL(38,2,3); AL(38,3,4); AL(38,4,5);
+  AL(38,6,7); AL(38,7,8); AL(38,8,9); AL(38,2,7);
+
+  { 39 Grus - grue }
+  Def(39,'Grus','Grue','Gru','Gruis','Bayer',
+      'Alnair','Inv.boreal',366,1.74,22.5,-46.0,'S');
+  AP(39, 32, 32, 2); AP(39, 56, 56, 2); AP(39, 80, 80, 3);
+  AP(39,104, 92, 4); AP(39, 80, 36, 3);
+  AL(39,1,2); AL(39,2,3); AL(39,3,4); AL(39,2,5);
+
+  { 40 Hercules - Pierre angulaire (keystone) + bras/jambes }
+  Def(40,'Hercules','Hercule','Her','Herculis','Hercule',
+      'Kornephoros','Ete',1225,2.78,17.4,27.0,'N');
+  AP(40, 40, 40, 3); AP(40, 88, 40, 3); AP(40, 96, 72, 3);
+  AP(40, 32, 72, 2); AP(40, 16, 88, 4); AP(40,112, 88, 4);
+  AP(40, 24, 24, 4); AP(40,104, 24, 4); AP(40, 60, 60, 4);
+  AL(40,1,2); AL(40,2,3); AL(40,3,4); AL(40,4,1);
+  AL(40,3,6); AL(40,4,5); AL(40,1,7); AL(40,2,8); AL(40,9,4);
+
+  { 41 Horologium - horloge }
+  Def(41,'Horologium','Horloge','Hor','Horologii','La Caille',
+      'Alpha Hor.','Hiver',249,3.86,3.0,-52.0,'S');
+  AP(41, 24, 32, 4); AP(41, 56, 48, 4); AP(41, 80, 72, 5); AP(41,104, 96, 4);
+  AL(41,1,2); AL(41,2,3); AL(41,3,4);
+
+  { 42 Hydra - hydre (long serpent) }
+  Def(42,'Hydra','Hydre','Hya','Hydrae','Hercule',
+      'Alphard','Printemps',1303,1.98,11.0,-15.0,'E');
+  AP(42, 12, 48, 3); AP(42, 22, 40, 3); AP(42, 16, 56, 3); AP(42, 28, 60, 3);
+  AP(42, 36, 68, 3); AP(42, 52, 72, 2); AP(42, 68, 76, 4); AP(42, 84, 72, 4);
+  AP(42,100, 80, 4); AP(42,116, 96, 4);
+  AL(42,1,2); AL(42,1,3); AL(42,3,4); AL(42,4,5); AL(42,5,6);
+  AL(42,6,7); AL(42,7,8); AL(42,8,9); AL(42,9,10);
+
+  { 43 Hydrus - hydre male }
+  Def(43,'Hydrus','Hydre male','Hyi','Hydri','Bayer',
+      'Beta Hydri','Inv.boreal',243,2.82,2.5,-72.0,'S');
+  AP(43, 24, 32, 3); AP(43, 60, 56, 3); AP(43, 96, 80, 3); AP(43, 80, 96, 4);
+  AL(43,1,2); AL(43,2,3); AL(43,3,4);
+
+  { 44 Indus - indien }
+  Def(44,'Indus','Indien','Ind','Indi','Bayer',
+      'Alpha Indi','Inv.boreal',294,3.11,21.5,-55.0,'S');
+  AP(44, 32, 32, 3); AP(44, 64, 48, 4); AP(44, 80, 80, 4); AP(44, 48, 96, 4);
+  AL(44,1,2); AL(44,2,3); AL(44,3,4);
+
+  { 45 Lacerta - lezard (zigzag) }
+  Def(45,'Lacerta','Lezard','Lac','Lacertae','Persee',
+      'Alpha Lacertae','Automne',201,3.78,22.5,45.0,'N');
+  AP(45, 32, 24, 4); AP(45, 56, 44, 4); AP(45, 40, 64, 4);
+  AP(45, 72, 80, 4); AP(45, 56, 96, 4);
+  AL(45,1,2); AL(45,2,3); AL(45,3,4); AL(45,4,5);
+
+  { 46 Leo - lion (faucille + triangle) }
+  Def(46,'Leo','Lion','Leo','Leonis','Zodiaque',
+      'Regulus','Printemps',947,1.35,10.7,15.0,'N');
+  AP(46, 16, 80, 1); AP(46, 24, 60, 3); AP(46, 32, 44, 3); AP(46, 40, 36, 3);
+  AP(46, 52, 32, 3); AP(46, 56, 56, 3); AP(46, 88, 56, 3); AP(46,112, 64, 2);
+  AP(46, 96, 88, 4);
+  AL(46,1,2); AL(46,2,3); AL(46,3,4); AL(46,4,5); AL(46,2,6);
+  AL(46,6,7); AL(46,7,8); AL(46,8,9); AL(46,9,1);
+
+  { 47 Leo Minor - petit lion }
+  Def(47,'Leo Minor','Petit lion','LMi','Leonis Minoris','Ursa Major',
+      'Beta LMi','Printemps',232,4.21,10.4,33.0,'N');
+  AP(47, 28, 80, 4); AP(47, 64, 60, 4); AP(47, 96, 56, 4);
+  AL(47,1,2); AL(47,2,3);
+
+  { 48 Lepus - lievre }
+  Def(48,'Lepus','Lievre','Lep','Leporis','Orion',
+      'Arneb','Hiver',290,2.58,5.5,-20.0,'S');
+  AP(48, 24, 48, 3); AP(48, 48, 56, 2); AP(48, 64, 72, 3); AP(48, 84, 64, 3);
+  AP(48, 92, 88, 3); AP(48, 36, 76, 3);
+  AL(48,1,2); AL(48,2,3); AL(48,3,4); AL(48,3,5); AL(48,3,6);
+
+  { 49 Libra - balance }
+  Def(49,'Libra','Balance','Lib','Librae','Zodiaque',
+      'Zubeneschamali','Ete',538,2.61,15.2,-15.0,'E');
+  AP(49, 16, 56, 3); AP(49, 60, 32, 2); AP(49,104, 56, 3); AP(49, 60, 96, 3);
+  AL(49,1,2); AL(49,2,3); AL(49,1,4); AL(49,3,4);
+
+  { 50 Lupus - loup }
+  Def(50,'Lupus','Loup','Lup','Lupi','Hercule',
+      'Alpha Lupi','Ete',334,2.3,15.2,-43.0,'S');
+  AP(50, 24, 80, 3); AP(50, 44, 56, 2); AP(50, 64, 36, 3);
+  AP(50, 96, 48, 3); AP(50, 88, 84, 3);
+  AL(50,1,2); AL(50,2,3); AL(50,3,4); AL(50,4,5); AL(50,5,1);
+
+  { 51 Lynx - lynx }
+  Def(51,'Lynx','Lynx','Lyn','Lyncis','Ursa Major',
+      'Alpha Lyncis','Hiver',545,3.13,8.0,47.0,'N');
+  AP(51, 16, 88, 4); AP(51, 36, 72, 4); AP(51, 60, 56, 4);
+  AP(51, 84, 40, 4); AP(51,108, 32, 3);
+  AL(51,1,2); AL(51,2,3); AL(51,3,4); AL(51,4,5);
+
+  { 52 Lyra - lyre }
+  Def(52,'Lyra','Lyre','Lyr','Lyrae','Hercule',
+      'Vega','Ete',286,0.03,18.6,39.0,'N');
+  AP(52, 60, 24, 1); AP(52, 44, 48, 3); AP(52, 76, 48, 3);
+  AP(52, 40, 88, 3); AP(52, 80, 96, 3);
+  AL(52,1,2); AL(52,1,3); AL(52,2,4); AL(52,3,5); AL(52,4,5);
+
+  { 53 Mensa - table }
+  Def(53,'Mensa','Table','Men','Mensae','La Caille',
+      'Alpha Mensae','Inv.boreal',153,5.09,5.5,-77.0,'S');
+  AP(53, 32, 40, 5); AP(53, 64, 60, 5); AP(53, 96, 88, 5);
+  AL(53,1,2); AL(53,2,3);
+
+  { 54 Microscopium - microscope }
+  Def(54,'Microscopium','Microscope','Mic','Microscopii','La Caille',
+      'Gamma Micro.','Automne',210,4.67,21.0,-37.0,'S');
+  AP(54, 32, 40, 4); AP(54, 64, 56, 4); AP(54, 96, 48, 4); AP(54, 80, 88, 4);
+  AL(54,1,2); AL(54,2,3); AL(54,2,4);
+
+  { 55 Monoceros - licorne }
+  Def(55,'Monoceros','Licorne','Mon','Monocerotis','Orion',
+      'Beta Mono.','Hiver',482,3.74,7.0,-2.0,'E');
+  AP(55, 24, 32, 4); AP(55, 56, 56, 4); AP(55, 88, 40, 4);
+  AP(55,104, 80, 4); AP(55, 40, 88, 4);
+  AL(55,1,2); AL(55,2,3); AL(55,3,4); AL(55,2,5);
+
+  { 56 Musca - mouche }
+  Def(56,'Musca','Mouche','Mus','Muscae','Bayer',
+      'Alpha Muscae','Inv.boreal',138,2.69,12.5,-70.0,'S');
+  AP(56, 64, 64, 3); AP(56, 32, 48, 4); AP(56, 96, 48, 4);
+  AP(56, 32, 88, 4); AP(56, 96, 88, 4);
+  AL(56,1,2); AL(56,1,3); AL(56,1,4); AL(56,1,5);
+
+  { 57 Norma - regle }
+  Def(57,'Norma','Regle','Nor','Normae','La Caille',
+      'Gamma2 Normae','Inv.boreal',165,4.02,16.0,-55.0,'S');
+  AP(57, 32, 40, 4); AP(57, 80, 40, 4); AP(57, 96, 88, 4); AP(57, 48, 88, 4);
+  AL(57,1,2); AL(57,2,3); AL(57,3,4); AL(57,4,1);
+
+  { 58 Octans - octant }
+  Def(58,'Octans','Octant','Oct','Octantis','La Caille',
+      'Nu Octantis','Inv.boreal',291,3.73,22.0,-87.0,'S');
+  AP(58, 32, 80, 4); AP(58, 64, 32, 4); AP(58, 96, 80, 4);
+  AL(58,1,2); AL(58,2,3); AL(58,3,1);
+
+  { 59 Ophiuchus - porteur de serpent (pentagon + tete) }
+  Def(59,'Ophiuchus','Ophiuchus','Oph','Ophiuchi','Hercule',
+      'Ras Alhague','Ete',948,2.07,17.2,-8.0,'E');
+  AP(59, 64, 16, 2); AP(59, 24, 48, 3); AP(59,104, 48, 3);
+  AP(59, 40, 88, 3); AP(59, 88, 88, 3); AP(59, 64, 96, 4);
+  AP(59, 12, 64, 4); AP(59,116, 64, 4);
+  AL(59,1,2); AL(59,1,3); AL(59,2,4); AL(59,3,5); AL(59,4,6); AL(59,5,6);
+  AL(59,2,7); AL(59,3,8);
+
+  { 60 Orion - chasseur }
+  Def(60,'Orion','Orion','Ori','Orionis','Orion',
+      'Rigel','Hiver',594,0.13,5.5,5.0,'E');
+  AP(60, 28, 24, 1); AP(60,100, 32, 0); AP(60, 56, 60, 2);
+  AP(60, 64, 64, 2); AP(60, 72, 68, 2); AP(60, 36, 96, 1);
+  AP(60,100, 96, 1); AP(60, 56, 16, 3); AP(60, 80, 12, 3);
+  AL(60,1,3); AL(60,2,5); AL(60,3,4); AL(60,4,5); AL(60,3,6);
+  AL(60,5,7); AL(60,1,8); AL(60,2,9); AL(60,8,9);
+
+  { 61 Pavo - paon }
+  Def(61,'Pavo','Paon','Pav','Pavonis','Bayer',
+      'Peacock','Inv.boreal',378,1.94,19.5,-65.0,'S');
+  AP(61, 24, 32, 2); AP(61, 56, 56, 3); AP(61, 88, 40, 3);
+  AP(61,104, 80, 3); AP(61, 56, 96, 4);
+  AL(61,1,2); AL(61,2,3); AL(61,2,4); AL(61,2,5);
+
+  { 62 Pegasus - grand carre + tete }
+  Def(62,'Pegasus','Pegase','Peg','Pegasi','Persee',
+      'Enif','Automne',1121,2.4,22.5,20.0,'N');
+  AP(62, 32, 24, 3); AP(62, 96, 24, 3); AP(62, 96, 88, 3);
+  AP(62, 32, 88, 2); AP(62, 16, 56, 3); AP(62, 12, 88, 4);
+  AL(62,1,2); AL(62,2,3); AL(62,3,4); AL(62,4,1); AL(62,4,5); AL(62,5,6);
+
+  { 63 Perseus - heros }
+  Def(63,'Perseus','Persee','Per','Persei','Persee',
+      'Mirfak','Hiver',615,1.79,3.5,45.0,'N');
+  AP(63, 32, 16, 4); AP(63, 48, 40, 3); AP(63, 60, 56, 2);
+  AP(63, 76, 72, 3); AP(63, 96, 88, 3); AP(63, 28, 60, 3); AP(63, 92, 40, 3);
+  AL(63,1,2); AL(63,2,3); AL(63,3,4); AL(63,4,5); AL(63,3,6); AL(63,3,7);
+
+  { 64 Phoenix - phoenix }
+  Def(64,'Phoenix','Phenix','Phe','Phoenicis','Bayer',
+      'Ankaa','Automne',469,2.39,1.0,-48.0,'S');
+  AP(64, 24, 56, 2); AP(64, 56, 32, 3); AP(64, 88, 56, 3);
+  AP(64, 80, 96, 4); AP(64, 36, 96, 4);
+  AL(64,1,2); AL(64,2,3); AL(64,3,4); AL(64,4,5); AL(64,5,1);
+
+  { 65 Pictor - chevalet }
+  Def(65,'Pictor','Chevalet','Pic','Pictoris','La Caille',
+      'Alpha Pictoris','Hiver',247,3.27,5.7,-53.0,'S');
+  AP(65, 32, 32, 3); AP(65, 64, 64, 4); AP(65, 96, 96, 4);
+  AL(65,1,2); AL(65,2,3);
+
+  { 66 Pisces - poissons (V chain) }
+  Def(66,'Pisces','Poissons','Psc','Piscium','Zodiaque',
+      'Alpherg','Automne',889,3.62,0.8,15.0,'N');
+  AP(66, 12, 88, 4); AP(66, 28, 76, 4); AP(66, 44, 60, 4);
+  AP(66, 60, 56, 3); AP(66, 80, 56, 4); AP(66, 96, 44, 4);
+  AP(66,112, 24, 4); AP(66,104, 16, 4);
+  AL(66,1,2); AL(66,2,3); AL(66,3,4); AL(66,4,5); AL(66,5,6);
+  AL(66,6,7); AL(66,7,8);
+
+  { 67 Piscis Austrinus - poisson austral }
+  Def(67,'Piscis Austrinus','Poisson austral','PsA','Piscis Austrini','Eaux celestes',
+      'Fomalhaut','Automne',245,1.16,22.5,-30.0,'S');
+  AP(67, 16, 64, 1); AP(67, 40, 56, 3); AP(67, 60, 48, 4);
+  AP(67, 80, 56, 4); AP(67, 96, 72, 4); AP(67, 80, 80, 4); AP(67, 40, 80, 4);
+  AL(67,1,2); AL(67,2,3); AL(67,3,4); AL(67,4,5); AL(67,5,6); AL(67,6,7); AL(67,7,1);
+
+  { 68 Puppis - poupe }
+  Def(68,'Puppis','Poupe','Pup','Puppis','Eaux celestes',
+      'Naos','Hiver',673,2.21,7.5,-35.0,'S');
+  AP(68, 32, 24, 2); AP(68, 56, 48, 3); AP(68, 80, 64, 3);
+  AP(68,104, 88, 3); AP(68, 28, 72, 3); AP(68, 80, 96, 4);
+  AL(68,1,2); AL(68,2,3); AL(68,3,4); AL(68,2,5); AL(68,3,6);
+
+  { 69 Pyxis - boussole }
+  Def(69,'Pyxis','Boussole','Pyx','Pyxidis','La Caille',
+      'Alpha Pyxidis','Printemps',221,3.68,8.8,-30.0,'S');
+  AP(69, 32, 32, 4); AP(69, 64, 56, 3); AP(69, 96, 88, 4);
+  AL(69,1,2); AL(69,2,3);
+
+  { 70 Reticulum - reticule (losange) }
+  Def(70,'Reticulum','Reticule','Ret','Reticuli','La Caille',
+      'Alpha Reticuli','Hiver',114,3.35,4.0,-60.0,'S');
+  AP(70, 64, 24, 4); AP(70, 96, 64, 3); AP(70, 64,104, 4); AP(70, 32, 64, 4);
+  AL(70,1,2); AL(70,2,3); AL(70,3,4); AL(70,4,1);
+
+  { 71 Sagitta - fleche }
+  Def(71,'Sagitta','Fleche','Sge','Sagittae','Hercule',
+      'Gamma Sagittae','Ete',80,3.47,19.7,18.0,'N');
+  AP(71, 16, 64, 4); AP(71, 60, 56, 4); AP(71,108, 48, 3); AP(71, 80, 80, 4);
+  AL(71,1,2); AL(71,2,3); AL(71,2,4);
+
+  { 72 Sagittarius - theiere }
+  Def(72,'Sagittarius','Sagittaire','Sgr','Sagittarii','Zodiaque',
+      'Kaus Australis','Ete',867,1.85,19.0,-25.0,'S');
+  AP(72, 24, 56, 2); AP(72, 24, 88, 3); AP(72, 56, 40, 3);
+  AP(72, 56, 72, 3); AP(72, 88, 56, 3); AP(72, 88, 88, 3);
+  AP(72,112, 80, 4); AP(72, 56, 96, 3);
+  AL(72,1,3); AL(72,1,2); AL(72,2,4); AL(72,3,5); AL(72,4,6);
+  AL(72,5,6); AL(72,6,7); AL(72,2,8); AL(72,8,4);
+
+  { 73 Scorpius - scorpion (J) }
+  Def(73,'Scorpius','Scorpion','Sco','Scorpii','Zodiaque',
+      'Antares','Ete',497,1.06,16.7,-30.0,'S');
+  AP(73, 24, 24, 3); AP(73, 36, 32, 3); AP(73, 48, 40, 3);
+  AP(73, 56, 56, 1); AP(73, 56, 72, 3); AP(73, 60, 88, 3);
+  AP(73, 80, 96, 3); AP(73,100, 92, 3); AP(73,108, 76, 3); AP(73, 96, 60, 4);
+  AL(73,1,2); AL(73,2,3); AL(73,3,4); AL(73,4,5); AL(73,5,6);
+  AL(73,6,7); AL(73,7,8); AL(73,8,9); AL(73,9,10);
+
+  { 74 Sculptor - sculpteur }
+  Def(74,'Sculptor','Sculpteur','Scl','Sculptoris','La Caille',
+      'Alpha Sculpt.','Automne',475,4.31,0.5,-35.0,'S');
+  AP(74, 24, 80, 4); AP(74, 56, 56, 4); AP(74, 88, 40, 4); AP(74,104, 88, 4);
+  AL(74,1,2); AL(74,2,3); AL(74,2,4);
+
+  { 75 Scutum - ecu }
+  Def(75,'Scutum','Ecu de Sobieski','Sct','Scuti','Hercule',
+      'Alpha Scuti','Ete',109,3.85,18.7,-10.0,'S');
+  AP(75, 64, 24, 4); AP(75, 32, 64, 4); AP(75, 96, 64, 4); AP(75, 64,104, 4);
+  AL(75,1,2); AL(75,1,3); AL(75,2,4); AL(75,3,4);
+
+  { 76 Serpens - serpent (deux parties) }
+  Def(76,'Serpens','Serpent','Ser','Serpentis','Hercule',
+      'Unukalhai','Ete',637,2.63,16.0,5.0,'E');
+  AP(76, 16, 40, 3); AP(76, 32, 32, 4); AP(76, 48, 48, 3); AP(76, 56, 64, 2);
+  AP(76, 72, 72, 4); AP(76, 88, 80, 4); AP(76,104, 88, 4); AP(76,116, 96, 4);
+  AL(76,1,2); AL(76,2,3); AL(76,3,4); AL(76,4,5); AL(76,5,6); AL(76,6,7); AL(76,7,8);
+
+  { 77 Sextans - sextant }
+  Def(77,'Sextans','Sextant','Sex','Sextantis','Hercule',
+      'Alpha Sextantis','Printemps',314,4.49,10.3,-3.0,'E');
+  AP(77, 24, 40, 4); AP(77, 64, 64, 4); AP(77,104, 80, 5);
+  AL(77,1,2); AL(77,2,3);
+
+  { 78 Taurus - taureau (V Hyades + cornes) }
+  Def(78,'Taurus','Taureau','Tau','Tauri','Zodiaque',
+      'Aldebaran','Hiver',797,0.87,4.5,16.0,'N');
+  AP(78, 56, 64, 1); AP(78, 40, 76, 4); AP(78, 32, 84, 4);
+  AP(78, 48, 88, 4); AP(78, 64, 80, 4); AP(78, 76, 88, 4);
+  AP(78,100, 32, 3); AP(78, 88, 24, 3); AP(78, 20, 48, 4);
+  AL(78,1,2); AL(78,2,3); AL(78,3,4); AL(78,4,5); AL(78,5,1);
+  AL(78,1,7); AL(78,1,8); AL(78,2,9);
+
+  { 79 Telescopium - telescope }
+  Def(79,'Telescopium','Telescope','Tel','Telescopii','La Caille',
+      'Alpha Telesc.','Ete',252,3.49,19.0,-50.0,'S');
+  AP(79, 32, 40, 3); AP(79, 64, 72, 4); AP(79, 96, 56, 4);
+  AL(79,1,2); AL(79,2,3);
+
+  { 80 Triangulum - triangle }
+  Def(80,'Triangulum','Triangle','Tri','Trianguli','Persee',
+      'Beta Trianguli','Automne',132,3.0,2.0,33.0,'N');
+  AP(80, 24, 88, 3); AP(80,104, 88, 3); AP(80, 80, 32, 3);
+  AL(80,1,2); AL(80,2,3); AL(80,3,1);
+
+  { 81 Triangulum Australe - triangle austral }
+  Def(81,'Triangulum Australe','Triangle austral','TrA','Trianguli Australis','Hercule',
+      'Atria','Inv.boreal',110,1.91,16.0,-65.0,'S');
+  AP(81, 64, 24, 1); AP(81, 24, 96, 2); AP(81,104, 96, 3);
+  AL(81,1,2); AL(81,2,3); AL(81,3,1);
+
+  { 82 Tucana - toucan }
+  Def(82,'Tucana','Toucan','Tuc','Tucanae','Bayer',
+      'Alpha Tucanae','Inv.boreal',295,2.86,23.7,-65.0,'S');
+  AP(82, 24, 40, 2); AP(82, 56, 56, 3); AP(82, 88, 48, 4);
+  AP(82, 96, 88, 4); AP(82, 40, 92, 4);
+  AL(82,1,2); AL(82,2,3); AL(82,3,4); AL(82,4,5); AL(82,5,1);
+
+  { 83 Ursa Major - grande ourse (Grand Chariot) }
+  Def(83,'Ursa Major','Grande Ourse','UMa','Ursae Majoris','Ursa Major',
+      'Alioth','Toutes',1280,1.77,11.0,58.0,'N');
+  AP(83, 16, 80, 2); AP(83, 36, 88, 3); AP(83, 36, 72, 3); AP(83, 56, 64, 3);
+  AP(83, 72, 56, 2); AP(83, 88, 40, 2); AP(83,108, 32, 2);
+  AP(83, 20, 24, 4); AP(83, 36, 32, 4); AP(83, 52, 40, 4); AP(83, 56, 88, 4);
+  AL(83,1,2); AL(83,2,3); AL(83,3,1); AL(83,3,4); AL(83,4,5);
+  AL(83,5,6); AL(83,6,7); AL(83,3,8); AL(83,4,9); AL(83,4,10); AL(83,2,11);
+
+  { 84 Ursa Minor - petite ourse (Petit Chariot, alpha=Polaris) }
+  Def(84,'Ursa Minor','Petite Ourse','UMi','Ursae Minoris','Ursa Major',
+      'Polaris','Toutes',256,1.97,15.0,78.0,'N');
+  AP(84, 64, 16, 2); AP(84, 60, 40, 4); AP(84, 56, 64, 3); AP(84, 48, 88, 3);
+  AP(84, 72, 92, 2); AP(84, 84, 72, 3); AP(84, 76, 60, 3);
+  AL(84,1,2); AL(84,2,3); AL(84,3,4); AL(84,4,5); AL(84,5,6); AL(84,6,7); AL(84,7,3);
+
+  { 85 Vela - voiles }
+  Def(85,'Vela','Voiles','Vel','Velorum','Eaux celestes',
+      'Suhail','Inv.boreal',500,1.83,9.5,-50.0,'S');
+  AP(85, 24, 24, 2); AP(85, 96, 32, 2); AP(85,108, 80, 3);
+  AP(85, 60, 96, 3); AP(85, 32, 88, 3); AP(85, 64, 56, 3);
+  AL(85,1,2); AL(85,2,3); AL(85,3,4); AL(85,4,5); AL(85,5,1); AL(85,1,6); AL(85,6,3);
+
+  { 86 Virgo - vierge (Y) }
+  Def(86,'Virgo','Vierge','Vir','Virginis','Zodiaque',
+      'Spica','Printemps',1294,0.97,13.4,-4.0,'E');
+  AP(86, 56, 96, 1); AP(86, 40, 72, 3); AP(86, 24, 56, 3); AP(86, 56, 56, 3);
+  AP(86, 88, 48, 3); AP(86,104, 32, 3); AP(86, 76, 80, 3); AP(86, 96, 88, 4);
+  AL(86,1,2); AL(86,2,3); AL(86,2,4); AL(86,4,5); AL(86,5,6); AL(86,1,7); AL(86,7,8);
+
+  { 87 Volans - poisson volant }
+  Def(87,'Volans','Poisson volant','Vol','Volantis','Bayer',
+      'Beta Volantis','Inv.boreal',141,3.77,8.0,-70.0,'S');
+  AP(87, 24, 56, 3); AP(87, 56, 40, 4); AP(87, 88, 56, 4); AP(87, 56, 88, 4);
+  AL(87,1,2); AL(87,2,3); AL(87,3,4); AL(87,4,1);
+
+  { 88 Vulpecula - petit renard }
+  Def(88,'Vulpecula','Petit renard','Vul','Vulpeculae','Hercule',
+      'Anser','Ete',268,4.44,20.0,25.0,'N');
+  AP(88, 24, 80, 4); AP(88, 64, 56, 4); AP(88,104, 40, 4);
+  AL(88,1,2); AL(88,2,3);
+ End;
+
+Begin
+ InitData;
+ DlgR    :=MkRect(8,30,SCREEN_WIDTH-8,SCREEN_HEIGHT-30);
+ ListR   :=MkRect(DlgR.X1+8,  DlgR.Y1+24,DlgR.X1+228,DlgR.Y2-44);
+ SbR     :=MkRect(ListR.X2-12,ListR.Y1,  ListR.X2,   ListR.Y2);
+ FactR   :=MkRect(DlgR.X1+236,DlgR.Y1+24,DlgR.X2-8, DlgR.Y1+216);
+ ImgR    :=MkRect((DlgR.X1+236+DlgR.X2-8) Div 2 - 64, DlgR.Y1+232,
+                  (DlgR.X1+236+DlgR.X2-8) Div 2 + 64, DlgR.Y1+360);
+ BtnClose:=MkRect(DlgR.X2-90, DlgR.Y2-34,DlgR.X2-10, DlgR.Y2-10);
+ Sel:=83;       { Ursa Major par defaut }
+ TopIdx:=Sel-3; If TopIdx<1 Then TopIdx:=1;
+ VisRows:=(ListR.Y2-ListR.Y1-4) Div 14;
+ If VisRows<1 Then VisRows:=1;
+ If VisRows>NB_CONST Then VisRows:=NB_CONST;
+ If TopIdx>NB_CONST-VisRows+1 Then TopIdx:=NB_CONST-VisRows+1;
+ If TopIdx<1 Then TopIdx:=1;
+ Done:=False; OldMB:=0; NeedDraw:=True;
+
+ Repeat
+  If NeedDraw Then Begin
+   HideMouse;
+   FillRect(DlgR,CLR_DLG_BG);
+   FrameRect(DlgR,CLR_DLG_FRAME);
+   SetFillStyle(1,CLR_TITLE_BG);
+   Bar(DlgR.X1+1,DlgR.Y1+1,DlgR.X2-1,DlgR.Y1+18);
+   SetColor(CLR_TITLE_FG);
+   OutTextXY(DlgR.X1+8,DlgR.Y1+5,'Les 88 constellations reconnues par l''Union astronomique internationale (UAI)');
+   { LISTBOX }
+   FillRect(ListR,CLR_FIELD_BG);
+   FrameRect(ListR,CLR_DLG_FRAME);
+   For J:=0 To VisRows-1 Do Begin
+    IY:=TopIdx+J;
+    If IY>NB_CONST Then Break;
+    Yline:=ListR.Y1+2+J*14;
+    If IY=Sel Then Begin
+     SetFillStyle(1,CLR_SEL_BG);
+     Bar(ListR.X1+1,Yline,SbR.X1-1,Yline+13);
+     SetColor(CLR_SEL_FG);
+    End
+    Else
+     SetColor(CLR_FIELD_FG);
+    OutTextXY(ListR.X1+6,Yline+3,
+              CD[IY].Abrev+'  '+CD[IY].Nom);
+   End;
+   { Scrollbar }
+   FillRect(SbR,8);
+   FrameRect(SbR,CLR_DLG_FRAME);
+   If NB_CONST>VisRows Then Begin
+    ThumbH:=((SbR.Y2-SbR.Y1-2)*VisRows) Div NB_CONST;
+    If ThumbH<8 Then ThumbH:=8;
+    ThumbY:=SbR.Y1+1+
+            ((SbR.Y2-SbR.Y1-2-ThumbH)*(TopIdx-1)) Div (NB_CONST-VisRows+1);
+   End
+   Else Begin
+    ThumbH:=SbR.Y2-SbR.Y1-2; ThumbY:=SbR.Y1+1;
+   End;
+   SbThumb:=MkRect(SbR.X1+1,ThumbY,SbR.X2-1,ThumbY+ThumbH);
+   FillRect(SbThumb,CLR_BTN);
+   FrameRect(SbThumb,CLR_DLG_FRAME);
+   { FICHE TECHNIQUE }
+   FillRect(FactR,CLR_DLG_BG);
+   FrameRect(FactR,CLR_DLG_FRAME);
+   YR:=FactR.Y1+8;
+   SetColor(Blue);
+   OutTextXY(FactR.X1+8,YR,CD[Sel].Nom+'  ('+CD[Sel].NomFr+')');
+   Inc(YR,16);
+   SetColor(Magenta);
+   OutTextXY(FactR.X1+8,YR,'Abreviation IAU : '+CD[Sel].Abrev);
+   Inc(YR,16);
+   SetColor(CLR_FG);
+   OutTextXY(FactR.X1+8,YR,'Genitif         : '+CD[Sel].Genitif);
+   Inc(YR,14);
+   OutTextXY(FactR.X1+8,YR,'Famille         : '+CD[Sel].Famille);
+   Inc(YR,14);
+   OutTextXY(FactR.X1+8,YR,'Superficie      : '+FmtI(CD[Sel].Surface,5)+' deg carres');
+   Inc(YR,14);
+   OutTextXY(FactR.X1+8,YR,'Etoile princip. : '+CD[Sel].Etoile);
+   Inc(YR,14);
+   OutTextXY(FactR.X1+8,YR,'Magnitude       : '+FmtF(CD[Sel].MagPrinc,6,2));
+   Inc(YR,14);
+   Case CD[Sel].Hemisp Of
+    'N': Cstr:='Boreal';
+    'S': Cstr:='Austral';
+   Else  Cstr:='Equatorial';
+   End;
+   OutTextXY(FactR.X1+8,YR,'Hemisphere      : '+Cstr);
+   Inc(YR,14);
+   OutTextXY(FactR.X1+8,YR,'Visibilite      : '+CD[Sel].Saison);
+   Inc(YR,14);
+   OutTextXY(FactR.X1+8,YR,'AD centre       : '+FmtF(CD[Sel].ADh,6,1)+' h');
+   Inc(YR,14);
+   OutTextXY(FactR.X1+8,YR,'Declin. centre  : '+FmtF(CD[Sel].DecDeg,7,1)+' deg');
+   Inc(YR,14);
+   OutTextXY(FactR.X1+8,YR,'Nb etoiles trac.: '+FmtI(CD[Sel].NPts,3));
+   Inc(YR,14);
+   OutTextXY(FactR.X1+8,YR,'Nb segments     : '+FmtI(CD[Sel].NLines,3));
+   { DESSIN VECTORIEL 128x128 }
+   SetFillStyle(1,Black);
+   Bar(ImgR.X1,ImgR.Y1,ImgR.X2,ImgR.Y2);
+   SetColor(CLR_DLG_FRAME);
+   Rectangle(ImgR.X1-1,ImgR.Y1-1,ImgR.X2+1,ImgR.Y2+1);
+   { Segments }
+   SetColor(LightCyan);
+   For J:=1 To CD[Sel].NLines Do Begin
+    A:=CD[Sel].Lines[J].A; B:=CD[Sel].Lines[J].B;
+    If (A>=1)And(A<=CD[Sel].NPts)And(B>=1)And(B<=CD[Sel].NPts) Then
+     Line(ImgR.X1+CD[Sel].Pts[A].X, ImgR.Y1+CD[Sel].Pts[A].Y,
+          ImgR.X1+CD[Sel].Pts[B].X, ImgR.Y1+CD[Sel].Pts[B].Y);
+   End;
+   { Etoiles : taille et couleur proportionnelle a la magnitude }
+   For J:=1 To CD[Sel].NPts Do Begin
+    Rr := 4 - (CD[Sel].Pts[J].Mag Div 2);
+    If Rr<1 Then Rr:=1;
+    If Rr>4 Then Rr:=4;
+    If CD[Sel].Pts[J].Mag<=1 Then IY:=Yellow
+    Else If CD[Sel].Pts[J].Mag<=2 Then IY:=White
+    Else If CD[Sel].Pts[J].Mag<=3 Then IY:=LightGray
+    Else IY:=LightCyan;
+    SetFillStyle(1,IY);
+    SetColor(IY);
+    FillEllipse(ImgR.X1+CD[Sel].Pts[J].X,
+                ImgR.Y1+CD[Sel].Pts[J].Y, Rr, Rr);
+   End;
+   SetColor(CLR_FG);
+   OutTextXY(ImgR.X1,ImgR.Y2+8,CD[Sel].Nom);
+   { Bouton et bandeau d'aide }
+   DrawButton(BtnClose,'Fermer',True);
+   SetColor(CLR_FG);
+   OutTextXY(DlgR.X1+8,DlgR.Y2-22,
+    'Haut/Bas - choisir   PgUp/PgDn - page   Home/End - extreme   Esc');
+   ShowMouse;
+   NeedDraw:=False;
+  End;
+
+  If KeyPressed Then Begin
+   K:=ReadKey;
+   If K=#0 Then Begin
+    K:=ReadKey;
+    Case K Of
+     #72: If Sel>1 Then Begin
+           Dec(Sel);
+           If Sel<TopIdx Then TopIdx:=Sel;
+           NeedDraw:=True;
+          End;
+     #80: If Sel<NB_CONST Then Begin
+           Inc(Sel);
+           If Sel>=TopIdx+VisRows Then TopIdx:=Sel-VisRows+1;
+           NeedDraw:=True;
+          End;
+     #73: Begin
+           Sel:=Sel-VisRows; If Sel<1 Then Sel:=1;
+           TopIdx:=Sel; NeedDraw:=True;
+          End;
+     #81: Begin
+           Sel:=Sel+VisRows; If Sel>NB_CONST Then Sel:=NB_CONST;
+           TopIdx:=Sel-VisRows+1; If TopIdx<1 Then TopIdx:=1;
+           NeedDraw:=True;
+          End;
+     #71: Begin Sel:=1; TopIdx:=1; NeedDraw:=True; End;
+     #79: Begin
+           Sel:=NB_CONST;
+           TopIdx:=NB_CONST-VisRows+1;
+           If TopIdx<1 Then TopIdx:=1;
+           NeedDraw:=True;
+          End;
+    End;
+   End
+   Else Begin
+    If K=#27 Then Done:=True;
+    If K=#13 Then Done:=True;
+   End;
+  End;
+
+  If HasMouse Then Begin
+   ReadMouse(MX,MY,MB);
+   If (MB=1) And (OldMB=0) Then Begin
+    If PtInRect(MX,MY,BtnClose) Then Done:=True
+    Else If PtInRect(MX,MY,SbR) Then Begin
+     If NB_CONST>VisRows Then Begin
+      TopIdx:=1+((MY-SbR.Y1)*(NB_CONST-VisRows+1)) Div (SbR.Y2-SbR.Y1+1);
+      If TopIdx<1 Then TopIdx:=1;
+      If TopIdx>NB_CONST-VisRows+1 Then TopIdx:=NB_CONST-VisRows+1;
+      If Sel<TopIdx Then Sel:=TopIdx;
+      If Sel>=TopIdx+VisRows Then Sel:=TopIdx+VisRows-1;
+      NeedDraw:=True;
+     End;
+    End
+    Else If PtInRect(MX,MY,ListR) Then Begin
+     J:=(MY-ListR.Y1-2) Div 14;
+     IY:=TopIdx+J;
+     If (IY>=1) And (IY<=NB_CONST) Then Begin
+      Sel:=IY; NeedDraw:=True;
+     End;
+    End;
+   End;
+   OldMB:=MB;
+  End;
+  Delay(15);
+ Until Done;
+End;
+
 Procedure DoLeCouMer;
 { Lever, coucher, passage au meridien d'un astre quelconque (AD+Dec).
   Source verbatim : BIBLIL.PAS, procedure LeCouMer, branche "autres astres".
@@ -26052,6 +26970,7 @@ Begin
   ACT_COMETV:     DoComets;
   ACT_GALAXY:     DoGalaxy;
   ACT_PLANETS:    DoPlanets;
+  ACT_CONSTEL:    DoConstellations;
  End;
  NeedRedraw:=True;
 End;
