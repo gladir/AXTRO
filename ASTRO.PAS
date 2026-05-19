@@ -169,9 +169,12 @@ Const
  SCREEN_WIDTH    = 640;
  SCREEN_HEIGHT   = 480;
  MENUBAR_HEIGHT  = 20;
+ TOOLBAR_HEIGHT  = 28;
  STATUSBAR_HEIGHT= 20;
  NUM_MENUS       = 7;
  MAX_MENU_ITEMS  = 18;
+ NUM_TOOLS       = 1;
+ TI_LUNAR        = 0;
 
  { Couleurs (palette EGA/VGA 16) }
  CLR_BG          = 7;   { LightGray }
@@ -224,6 +227,13 @@ Type
   ItemCount: Integer;
   Items    : Array[0..MAX_MENU_ITEMS-1] Of TMenuItem;
   BarX1,BarX2: Integer;
+ End;
+
+ TToolBtn = Record
+  R       : TRect;
+  Action  : Integer;
+  IconId  : Integer;
+  Hint    : String[40];
  End;
 
  TStrLine = String[RESULT_LINE_LEN];
@@ -280,6 +290,7 @@ Var
 
  { --- Variables globales du GUI --- }
  Menus           : Array[0..NUM_MENUS-1] Of TMenu;
+ ToolButtons     : Array[0..NUM_TOOLS-1] Of TToolBtn;
  ActiveMenu      : Integer;     { -1 = pas de menu deroulant ouvert }
  ActiveMenuItem  : Integer;
  MenuActive      : Boolean;
@@ -5103,7 +5114,7 @@ End;
 Procedure DrawMainBackground;
 Begin
  SetFillStyle(1,Blue);
- Bar(0,MENUBAR_HEIGHT,SCREEN_WIDTH-1,SCREEN_HEIGHT-STATUSBAR_HEIGHT-1);
+ Bar(0,MENUBAR_HEIGHT+TOOLBAR_HEIGHT,SCREEN_WIDTH-1,SCREEN_HEIGHT-STATUSBAR_HEIGHT-1);
  SetColor(LightCyan);
  OutTextXY(SCREEN_WIDTH Div 2 - 80, SCREEN_HEIGHT Div 2 - 16,
            'A X T R O - Astronomie');
@@ -5112,11 +5123,79 @@ Begin
            'Choisissez une operation dans les menus deroulants.');
 End;
 
+{ Icone de calendrier lunaire (croissant sur fond bleu nuit, 20x20). }
+Procedure DrawLunarIcon(X,Y:Integer);
+Begin
+ SetFillStyle(1,Blue);
+ Bar(X+2,Y+2,X+18,Y+18);
+ SetColor(LightGray);
+ Rectangle(X+2,Y+2,X+18,Y+18);
+ { 3 etoiles }
+ PutPixel(X+5,Y+5,White);
+ PutPixel(X+15,Y+6,White);
+ PutPixel(X+6,Y+15,White);
+ PutPixel(X+14,Y+14,White);
+ { Croissant : disque jaune puis disque bleu decale a droite }
+ SetFillStyle(1,Yellow);
+ SetColor(Yellow);
+ FillEllipse(X+9,Y+10,5,5);
+ SetFillStyle(1,Blue);
+ SetColor(Blue);
+ FillEllipse(X+12,Y+9,5,5);
+End;
+
+Procedure DrawToolButton(I:Integer);
+Var R:TRect;
+Begin
+ R:=ToolButtons[I].R;
+ SetFillStyle(1,CLR_BTN);
+ Bar(R.X1,R.Y1,R.X2,R.Y2);
+ SetColor(CLR_BTN_LIGHT);
+ Line(R.X1,R.Y1,R.X2,R.Y1); Line(R.X1,R.Y1,R.X1,R.Y2);
+ SetColor(CLR_BTN_DARK);
+ Line(R.X1,R.Y2,R.X2,R.Y2); Line(R.X2,R.Y1,R.X2,R.Y2);
+ Case ToolButtons[I].IconId Of
+  TI_LUNAR: DrawLunarIcon(R.X1,R.Y1);
+ End;
+End;
+
+Procedure DrawToolbar;
+Var I:Integer;
+Begin
+ SetFillStyle(1,CLR_BTN);
+ Bar(0,MENUBAR_HEIGHT,SCREEN_WIDTH-1,MENUBAR_HEIGHT+TOOLBAR_HEIGHT-1);
+ SetColor(CLR_BTN_DARK);
+ Line(0,MENUBAR_HEIGHT+TOOLBAR_HEIGHT-1,
+      SCREEN_WIDTH-1,MENUBAR_HEIGHT+TOOLBAR_HEIGHT-1);
+ For I:=0 To NUM_TOOLS-1 Do DrawToolButton(I);
+End;
+
+Procedure InitToolbar;
+Var BtnY:Integer;
+Begin
+ BtnY:=MENUBAR_HEIGHT+4;
+ ToolButtons[TI_LUNAR].R:=MkRect(4,BtnY,4+20,BtnY+20);
+ ToolButtons[TI_LUNAR].Action:=ACT_PHASES;
+ ToolButtons[TI_LUNAR].IconId:=TI_LUNAR;
+ ToolButtons[TI_LUNAR].Hint:='Phases de la Lune';
+End;
+
+Function ToolbarHitTest(X,Y:LongInt):Integer;
+Var I:Integer;
+Begin
+ ToolbarHitTest:=-1;
+ For I:=0 To NUM_TOOLS-1 Do
+  If PtInRect(X,Y,ToolButtons[I].R) Then Begin
+   ToolbarHitTest:=I; Exit;
+  End;
+End;
+
 Procedure RedrawAll;
 Begin
  HideMouse;
  DrawMainBackground;
  DrawMenuBar;
+ DrawToolbar;
  DrawStatusBar('Pret');
  ShowMouse;
 End;
@@ -18450,6 +18529,12 @@ Begin
  Idx:=MenuBarHitTest(X,Y);
  If Idx>=0 Then Begin
   MenuActive:=True; ActiveMenu:=Idx; ActiveMenuItem:=-1; NeedRedraw:=True;
+  Exit;
+ End;
+ Idx:=ToolbarHitTest(X,Y);
+ If Idx>=0 Then Begin
+  DispatchAction(ToolButtons[Idx].Action);
+  NeedRedraw:=True;
  End;
 End;
 
@@ -18521,6 +18606,7 @@ BEGIN
  InitSemMth;
  InitMenus;
  LayoutMenuBar;
+ InitToolbar;
  RClear;
  ResultTitle:='Resultats';
  ActiveMenu:=-1;
