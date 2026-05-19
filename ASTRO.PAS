@@ -23056,6 +23056,8 @@ Var
  J,IY,YR,ThumbY,ThumbH,A,B,Rr : Integer;
  Yline : Integer;
  Cstr : String;
+ MnX,MnY,MxX,MxY,BBW,BBH,ImgW,ImgH,CX,CY,PXa,PYa,PXb,PYb : Integer;
+ ScF : Real;
 
  Procedure Def(I:Integer; Nm,NmF,Ab,Gn,Fm,Et,Sn:String;
                Sf:Integer; Mg,Ah,Dc:Real; Hm:Char);
@@ -23793,18 +23795,44 @@ Begin
    OutTextXY(FactR.X1+8,YR,'Nb etoiles trac.: '+FmtI(CD[Sel].NPts,3));
    Inc(YR,14);
    OutTextXY(FactR.X1+8,YR,'Nb segments     : '+FmtI(CD[Sel].NLines,3));
-   { DESSIN VECTORIEL 128x128 }
+   { DESSIN VECTORIEL : 128x128 ou 256x128 selon orientation }
+   { Calcul du rectangle englobant des etoiles tracees }
+   MnX:=255; MnY:=255; MxX:=0; MxY:=0;
+   For J:=1 To CD[Sel].NPts Do Begin
+    If CD[Sel].Pts[J].X<MnX Then MnX:=CD[Sel].Pts[J].X;
+    If CD[Sel].Pts[J].Y<MnY Then MnY:=CD[Sel].Pts[J].Y;
+    If CD[Sel].Pts[J].X>MxX Then MxX:=CD[Sel].Pts[J].X;
+    If CD[Sel].Pts[J].Y>MxY Then MxY:=CD[Sel].Pts[J].Y;
+   End;
+   BBW:=MxX-MnX; BBH:=MxY-MnY;
+   If BBW<1 Then BBW:=1; If BBH<1 Then BBH:=1;
+   { Si la constellation est plus large que haute, image 256x128 }
+   If BBW>BBH+4 Then ImgW:=256 Else ImgW:=128;
+   ImgH:=128;
+   CX:=(FactR.X1+FactR.X2) Div 2;
+   CY:=DlgR.Y1+232+(ImgH Div 2);
+   ImgR:=MkRect(CX-(ImgW Div 2),CY-(ImgH Div 2),
+                CX+(ImgW Div 2),CY+(ImgH Div 2));
+   { Echelle preservant le ratio, marge 8 px }
+   If (BBW*(ImgH-16)) > (BBH*(ImgW-16)) Then
+    ScF:=(ImgW-16)/BBW
+   Else
+    ScF:=(ImgH-16)/BBH;
    SetFillStyle(1,Black);
    Bar(ImgR.X1,ImgR.Y1,ImgR.X2,ImgR.Y2);
    SetColor(CLR_DLG_FRAME);
    Rectangle(ImgR.X1-1,ImgR.Y1-1,ImgR.X2+1,ImgR.Y2+1);
-   { Segments }
+   { Segments (coords transformees, centrees) }
    SetColor(LightCyan);
    For J:=1 To CD[Sel].NLines Do Begin
     A:=CD[Sel].Lines[J].A; B:=CD[Sel].Lines[J].B;
-    If (A>=1)And(A<=CD[Sel].NPts)And(B>=1)And(B<=CD[Sel].NPts) Then
-     Line(ImgR.X1+CD[Sel].Pts[A].X, ImgR.Y1+CD[Sel].Pts[A].Y,
-          ImgR.X1+CD[Sel].Pts[B].X, ImgR.Y1+CD[Sel].Pts[B].Y);
+    If (A>=1)And(A<=CD[Sel].NPts)And(B>=1)And(B<=CD[Sel].NPts) Then Begin
+     PXa:=ImgR.X1+(ImgW Div 2)+Round((CD[Sel].Pts[A].X-MnX-BBW/2)*ScF);
+     PYa:=ImgR.Y1+(ImgH Div 2)+Round((CD[Sel].Pts[A].Y-MnY-BBH/2)*ScF);
+     PXb:=ImgR.X1+(ImgW Div 2)+Round((CD[Sel].Pts[B].X-MnX-BBW/2)*ScF);
+     PYb:=ImgR.Y1+(ImgH Div 2)+Round((CD[Sel].Pts[B].Y-MnY-BBH/2)*ScF);
+     Line(PXa,PYa,PXb,PYb);
+    End;
    End;
    { Etoiles : taille et couleur proportionnelle a la magnitude }
    For J:=1 To CD[Sel].NPts Do Begin
@@ -23817,8 +23845,9 @@ Begin
     Else IY:=LightCyan;
     SetFillStyle(1,IY);
     SetColor(IY);
-    FillEllipse(ImgR.X1+CD[Sel].Pts[J].X,
-                ImgR.Y1+CD[Sel].Pts[J].Y, Rr, Rr);
+    PXa:=ImgR.X1+(ImgW Div 2)+Round((CD[Sel].Pts[J].X-MnX-BBW/2)*ScF);
+    PYa:=ImgR.Y1+(ImgH Div 2)+Round((CD[Sel].Pts[J].Y-MnY-BBH/2)*ScF);
+    FillEllipse(PXa,PYa, Rr, Rr);
    End;
    SetColor(CLR_FG);
    OutTextXY(ImgR.X1,ImgR.Y2+8,CD[Sel].Nom);
