@@ -14760,14 +14760,719 @@ Begin
  ResultsShow;
 End;
 
+{ ========================================================================== }
+{ ==== OBSERVATIONS PHYSIQUES DU SOLEIL (verbatim PHS1.PAS Solphys) ========= }
+{ ========================================================================== }
 Procedure DoSolphys;
-Begin ShowMessage('A integrer','Observations physiques Soleil : Phase 8 (PHS1.PAS).'); End;
+Var
+ fev,lc,bc,ap,a0,d0,w,xc,yc,xt,yt,s,th,d,l,b : Extended;
+ x,y,z,u,v                                   : Extended;
+ ng,nt,nw                                    : LongInt;
+ tpc                                         : Char;
+ Cont                                        : Boolean;
+Begin
+ If Not InputDateTime('Observations Soleil - Date et TE',qu,ms,an,hr,mn,sc) Then Exit;
+ jd:=jj(qu,ms,an,hr,mn,sc);
+ a0:=28613*pi/18000;
+ d0:=6387*pi/18000;
+ ReducPole(a0,d0);
+ eps:=pi*(84381.448+deps+t*((1.813*t-0.059)*t-468.15))/648000.0;
+ flag:=False;
+ Terre;
+ w:=84.10+14.1844*(jd-2451545.0-(r0/JLM));
+ w:=w-360*int(w/360);
+ If w<0 Then w:=w+360;
+ xc:=(ad0*pi/12)-a0;
+ yc:=dc0*pi/180;
+ x:=cos(xc)*sin(d0)*cos(yc)-cos(d0)*sin(yc);
+ y:=sin(xc)*cos(yc);
+ z:=-(cos(xc)*cos(d0)*cos(yc)+sin(d0)*sin(yc));
+ u:=sin(d0)*cos(yc)-cos(xc)*cos(d0)*sin(yc);
+ v:=-sin(xc)*cos(d0);
+ bc:=arctan(z/sqrt(x*x+y*y))*180/pi;
+ If x<>0 Then lc:=arctan(y/x)*180/pi Else lc:=90*y/Abs(y);
+ If x<0 Then lc:=lc+180;
+ lc:=90+lc-w;
+ lc:=lc-360*int(lc/360);
+ If lc<0 Then lc:=lc+360;
+ If u<>0 Then ap:=arctan(v/u)*180/pi Else ap:=90*v/Abs(u);
+ If u<0 Then ap:=ap+180;
+ If ap<0 Then ap:=ap+360;
+ If ap>180 Then ap:=ap-360;
+ cor:=Trunc(jd+1.5) Mod 7;
+ RClear;
+ ResultTitle:='Observations physiques du Soleil';
+ RWriteLn('Date et TE : '+sem[cor]+FmtI(qu,3)+' '+mth[ms]+FmtI(an,6)
+          +'  '+FmtI(hr,2)+'h'+FmtI(mn,3)+'m'+FmtF(sc,8,4)+'s');
+ RWriteLn('Jour julien                 : '+FmtF(jd,20,10));
+ RWriteLn('Angle de position du pole P : '+FmtF(ap,10,6));
+ RWriteLn('Latitude du centre B0       : '+FmtF(bc,10,6));
+ RWriteLn('Longitude du centre L0      : '+FmtF(lc,10,6));
 
+ If YesNo('Soleil','Obtenir le nombre de Wolf ?') Then
+  Begin
+   ng:=0; nt:=0;
+   wrk:=ng;
+   If InputReal('Soleil','Nombre de groupes de taches :',wrk) Then ng:=Trunc(wrk);
+   If ng<0 Then ng:=0;
+   If ng>0 Then
+    Begin
+     wrk:=nt;
+     If InputReal('Soleil','Nombre de taches :',wrk) Then nt:=Trunc(wrk);
+     If nt<ng Then nt:=ng;
+    End;
+   nw:=10*ng+nt;
+   RWriteLn('G = '+FmtI(ng,3)+'   T = '+FmtI(nt,4)+'   W = '+FmtI(nw,5));
+  End;
+
+ If YesNo('Soleil','Positions heliographiques de details a calculer ?') Then
+  Begin
+   If YesNo('Soleil','Coordonnees polaires (Non = cartesiennes) ?') Then tpc:='P' Else tpc:='C';
+   bc:=pi*bc/180;
+   lc:=pi*lc/180;
+   d:=0;
+   If Not InputReal('Soleil','Diametre apparent du Soleil sur cliche/dessin :',d) Then Exit;
+   If d<=0 Then Begin ShowMessage('Erreur','Diametre <= 0'); Exit; End;
+   fev:=sqrt(r0*r0-484416000000.0)*d/1392000.0;
+   RWriteLn('Calcul de positions heliographiques. Diametre solaire : '+FmtF(d,8,3));
+   Cont:=True;
+   While Cont Do
+    Begin
+     s:=0; th:=0;
+     If tpc='P' Then
+      Begin
+       If Not InputReal('Soleil','Distance r au centre (rau) :',s) Then Break;
+       If Not InputReal('Soleil','Angle de position theta (deg) :',th) Then Break;
+       x:=s*cos(pi*th/180);
+       y:=s*sin(pi*th/180);
+      End
+     Else
+      Begin
+       If Not InputReal('Soleil','Coordonnee X (vers Nord) :',x) Then Break;
+       If Not InputReal('Soleil','Coordonnee Y (vers Ouest) :',y) Then Break;
+       s:=sqrt(x*x+y*y);
+       If x<>0 Then th:=arctan(y/x) Else If s=0 Then th:=0 Else th:=90*y/Abs(y);
+       If x<0 Then th:=th+180;
+       If th<0 Then th:=th+180;
+      End;
+     RWriteLn('Distance au centre       : '+FmtF(s,8,3));
+     RWriteLn('Angle de position        : '+FmtF(th,5,1));
+     RWriteLn('Coordonnees cartesiennes : '+FmtF(x,10,3)+FmtF(y,10,3));
+     If 2*s>d Then RWriteLn('*** Erreur dans la mesure : 2*s > d ***')
+     Else
+      Begin
+       th:=pi*(ap-th)/180;
+       s:=arctan(s/fev);
+       wrk:=r0*sin(s)/696000.0;
+       If wrk>=1.0 Then s:=(pi/2)-s Else s:=arctan(wrk/sqrt(1-wrk*wrk))-s;
+       x:=(cos(s)*cos(bc)-sin(s)*sin(bc)*cos(th))*cos(lc);
+       x:=x-sin(s)*sin(th)*sin(lc);
+       y:=(cos(s)*cos(bc)-sin(s)*sin(bc)*cos(th))*sin(lc);
+       y:=y+sin(s)*sin(th)*cos(lc);
+       z:=sin(bc)*cos(s)+cos(bc)*sin(s)*cos(th);
+       If x<>0 Then l:=arctan(y/x)*180/pi
+       Else
+        Begin
+         If y<0 Then l:=270;
+         If y>0 Then l:=90;
+         If y=0 Then l:=0;
+        End;
+       If x<0 Then l:=l+180;
+       If l<0 Then l:=l+360;
+       b:=arctan(z/sqrt(x*x+y*y))*180/pi;
+       RWriteLn('L = '+FmtF(l,6,2)+'   B = '+FmtF(b,6,2));
+      End;
+     Cont:=YesNo('Soleil','Un autre detail ?');
+    End;
+  End;
+ ResultsShow;
+End;
+
+{ ========================================================================== }
+{ ==== OBSERVATIONS PHYSIQUES DE LA LUNE (verbatim PHS1.PAS Selenogr) ====== }
+{ ========================================================================== }
 Procedure DoSelenogr;
-Begin ShowMessage('A integrer','Selenographie : Phase 8 (PHS1.PAS).'); End;
+Var
+ fev,l,b,s,th,ap,lc,bc,ls,bs,fil,th0,aph,ts,lm,lg,lt,lgX : Extended;
+ ah,wM,e1,e2,e3,e4,e5,e6,e7,e8,e9,e10,e11,e12,e13,cls    : Extended;
+ a0,d0,asA,ds,ai,di,x,y,z,u,v,xs,ys,zs,us,vs,ws,d          : Extended;
+ elg,dlg,ecl,rcp,rsp                                       : Extended;
+ lgdg,lgmn,ltdg,ltmn,js                                    : LongInt;
+ lgsc,ltsc                                                 : Extended;
+ lgh,lth,tpc                                               : Char;
+ Cont                                                      : Boolean;
+Begin
+ { --- Lieu d'observation (topocentrique) --- }
+ lgdg:=0; lgmn:=0; lgsc:=0;
+ If Not InputAngleDMS('Selenographie','Longitude (valeur absolue)',
+                     lgdg,lgmn,lgsc,False) Then Exit;
+ lgh:='O';
+ If YesNo('Selenographie','Longitude Est (Non = Ouest) ?') Then lgh:='E' Else lgh:='O';
+ ltdg:=0; ltmn:=0; ltsc:=0;
+ If Not InputAngleDMS('Selenographie','Latitude (valeur absolue)',
+                     ltdg,ltmn,ltsc,True) Then Exit;
+ lth:='N';
+ If YesNo('Selenographie','Latitude Sud (Non = Nord) ?') Then lth:='S' Else lth:='N';
+ z:=0;
+ If Not InputReal('Selenographie','Altitude (metres) :',z) Then Exit;
 
+ lg:=((lgdg*60+lgmn)*60+lgsc)/3600;
+ If lgh='E' Then lg:=-lg;
+ lt:=((ltdg*60+ltmn)*60+ltsc)/3600;
+ If lth='S' Then lt:=-lt;
+
+ RClear;
+ ResultTitle:='Observations physiques de la Lune';
+ RWriteLn('Longitude Ouest : '+FmtF(lg,10,6));
+ RWriteLn('Latitude Nord   : '+FmtF(lt,10,6));
+ RWriteLn('Altitude (en m) : '+FmtF(z,10,3));
+
+ lg:=pi*lg/180;
+ lt:=pi*lt/180;
+ x:=REQT/sqrt(cos(lt)*cos(lt)+0.99330562*sin(lt)*sin(lt));
+ rcp:=(x+(z/1000))*cos(lt);
+ rsp:=(0.99330562*x+(z/1000))*sin(lt);
+ RWriteLn('Rau*cos(phi) = '+FmtF(rcp,10,3));
+ RWriteLn('Rau*sin(phi) = '+FmtF(rsp,10,3));
+
+ If Not InputDateTime('Selenographie - Date et TE',qu,ms,an,hr,mn,sc) Then Exit;
+ jd:=jj(qu,ms,an,hr,mn,sc);
+ Lune;
+ t:=(jd-2451545)/36525;
+ wrk:=jd-2451545.0-(r9/JLM);
+ e1:=125.045-0.0529921*wrk;
+ e2:=250.089-0.1059842*wrk;
+ e3:=260.008+13.0120009*wrk;
+ e4:=176.625+13.3407154*wrk;
+ e5:=357.529+0.9856003*wrk;
+ e6:=311.589+26.4057084*wrk;
+ e7:=134.963+13.0649930*wrk;
+ e8:=276.617+0.3287146*wrk;
+ e9:=34.226+1.7484877*wrk;
+ e10:=15.134-0.1589763*wrk;
+ e11:=119.743+0.0036096*wrk;
+ e12:=239.961+0.1643573*wrk;
+ e13:=25.053+12.9590088*wrk;
+ e1:=e1-360*int(e1/360);   e2:=e2-360*int(e2/360);
+ e3:=e3-360*int(e3/360);   e4:=e4-360*int(e4/360);
+ e5:=e5-360*int(e5/360);   e6:=e6-360*int(e6/360);
+ e7:=e7-360*int(e7/360);   e8:=e8-360*int(e8/360);
+ e9:=e9-360*int(e9/360);   e10:=e10-360*int(e10/360);
+ e11:=e11-360*int(e11/360); e12:=e12-360*int(e12/360);
+ e13:=e13-360*int(e13/360);
+ If e1<0 Then e1:=e1+360;   If e2<0 Then e2:=e2+360;
+ If e3<0 Then e3:=e3+360;   If e4<0 Then e4:=e4+360;
+ If e5<0 Then e5:=e5+360;   If e6<0 Then e6:=e6+360;
+ If e7<0 Then e7:=e7+360;   If e8<0 Then e8:=e8+360;
+ If e9<0 Then e9:=e9+360;   If e10<0 Then e10:=e10+360;
+ If e11<0 Then e11:=e11+360; If e12<0 Then e12:=e12+360;
+ If e13<0 Then e13:=e13+360;
+ e1:=e1*pi/180;   e2:=e2*pi/180;
+ e3:=e3*pi/180;   e4:=e4*pi/180;
+ e5:=e5*pi/180;   e6:=e6*pi/180;
+ e7:=e7*pi/180;   e8:=e8*pi/180;
+ e9:=e9*pi/180;   e10:=e10*pi/180;
+ e11:=e11*pi/180; e12:=e12*pi/180;
+ e13:=e13*pi/180;
+ a0:=(2699949+31*t-38787*sin(e1)-1204*sin(e2)+700*sin(e3)-172*sin(e4)+72*sin(e6)-52*sin(e10)+43*sin(e13))*pi/1800000;
+ d0:=(665392+130*t+15419*cos(e1)+239*cos(e2)-278*cos(e3)+68*cos(e4)-29*cos(e6)+9*cos(e7)+8*cos(e10)-9*cos(e13))*pi/1800000;
+ wM:=383213+wrk*(131763.5815-0.000000014*wrk)+35610*sin(e1)+1208*sin(e2);
+ wM:=wM-642*sin(e3)+158*sin(e4)+252*sin(e5)-66*sin(e6)-47*sin(e7)-46*sin(e8);
+ wM:=(wM+28*sin(e9)+52*sin(e10)+40*sin(e11)+19*sin(e12)-44*sin(e13))/10000;
+ wM:=wM-360*int(wM/360);
+ If wM<0 Then wM:=wM+360;
+ ReducPole(a0,d0);
+ eps:=pi*(deps+84381.448+t*((1.813*t-0.059)*t-468.15))/648000.0;
+ flag:=False;
+ Terre;
+ x:=x0+x9; y:=y0+y9; z:=z0+z9;
+ If x<>0 Then asA:=arctan(y/x) Else asA:=-pi*y/Abs(2*y);
+ If x>0 Then asA:=asA+pi;
+ If asA<0 Then asA:=asA+2*pi;
+ ds:=-arctan(z/sqrt(x*x+y*y));
+ ai:=pi*ad9/12;
+ di:=pi*dc9/180;
+ x:=cos(di)*sin(d0)*cos(a0-ai)-sin(di)*cos(d0);
+ y:=-sin(a0-ai)*cos(di);
+ z:=-(cos(di)*cos(d0)*cos(a0-ai)+sin(di)*sin(d0));
+ u:=cos(di)*sin(d0)-sin(di)*cos(d0)*cos(a0-ai);
+ v:=sin(a0-ai)*cos(d0);
+ xs:=sin(ds)*cos(d0)-cos(ds)*sin(d0)*cos(asA-a0);
+ ys:=sin(a0-asA)*cos(ds);
+ zs:=cos(ds)*cos(d0)*cos(asA-a0)+sin(ds)*sin(d0);
+ us:=sin(ds)*cos(di)-cos(ds)*sin(di)*cos(asA-ai);
+ vs:=sin(asA-ai)*cos(ds);
+ ws:=-(cos(ds)*cos(di)*cos(asA-ai)+sin(ds)*sin(di));
+ ap:=arctan(v/u)*180/pi;
+ If ap<0 Then ap:=ap+360;
+ fil:=(1+ws)/2;
+ If u<>0 Then ap:=arctan(v/u)*180/pi Else If v=0 Then ap:=0 Else ap:=90*v/Abs(v);
+ If u<0 Then ap:=ap+180;
+ If ap<0 Then ap:=ap+360;
+ If x<>0 Then lc:=arctan(y/x)*180/pi Else lc:=90*y/Abs(y);
+ If x<0 Then lc:=lc+180;
+ lc:=90+lc-wM;
+ lc:=lc-360*int(lc/360);
+ If lc<0 Then lc:=lc+360;
+ If lc>180 Then lc:=lc-360;
+ wrk:=sqrt(x*x+y*y);
+ If wrk<>0 Then bc:=arctan(z/wrk)*180/pi Else bc:=90*z/Abs(z);
+ If xs<>0 Then ls:=arctan(ys/xs)*180/pi Else ls:=90*ys/Abs(ys);
+ If xs<0 Then ls:=ls+180;
+ ls:=90+ls-wM;
+ ls:=ls-360*int(ls/360);
+ If ls<0 Then ls:=ls+360;
+ If ls>180 Then ls:=ls-360;
+ cls:=90-ls;
+ If cls<0 Then cls:=cls+360;
+ wrk:=sqrt(xs*xs+ys*ys);
+ If wrk<>0 Then bs:=arctan(zs/wrk)*180/pi Else bs:=90*zs/Abs(zs);
+ If us<>0 Then th0:=arctan(vs/us)*180/pi Else If vs=0 Then th0:=0 Else th0:=90*vs/Abs(vs);
+ If us<0 Then th0:=th0+180;
+ If th0<0 Then th0:=th0+360;
+ x:=y9*z0-y0*z9;
+ u:=z9*x0-z0*x9;
+ v:=x9*y0-x0*y9;
+ y:=u*cos(eps)+v*sin(eps);
+ z:=v*cos(eps)-u*sin(eps);
+ u:=z*sqrt(x*x+y*y+z*z)/Abs(z);
+ v:=x9*(x9+x0)+y9*(y9+y0)+z9*(z9+z0);
+ If v<>0 Then aph:=180*arctan(u/v)/pi Else aph:=90*u/Abs(u);
+ If v<0 Then aph:=aph+180;
+ If aph>180 Then aph:=aph-360;
+ wrk:=-(x0*x9+y0*y9+z0*z9);
+ If wrk<>0 Then elg:=180*arctan(u/wrk)/pi Else elg:=90*u/Abs(u);
+ If wrk<0 Then elg:=elg+180;
+ If elg>180 Then elg:=elg-360;
+ v:=x9*(x9+x0)+y9*(y9+y0)*cos(eps)*cos(eps)+z9*(z9+z0)*sin(eps)*sin(eps)+(z9*(y9+y0)+y9*(z9+z0))*cos(eps)*sin(eps);
+ If v<>0 Then dlg:=180*arctan(z/v)/pi Else dlg:=90*z/Abs(z);
+ If v<0 Then dlg:=dlg+180;
+ If dlg>180 Then dlg:=dlg-360;
+ wrk:=-(x9*x0+y9*y0*cos(eps)*cos(eps)+z9*z0*sin(eps)*sin(eps)+(z9*y0+y9*z0)*cos(eps)*sin(eps));
+ If wrk<>0 Then ecl:=180*arctan(z/wrk)/pi Else ecl:=90*z/Abs(z);
+ If wrk<0 Then ecl:=ecl+180;
+ If ecl>180 Then ecl:=ecl-360;
+ cor:=Trunc((ecl+360)/90) Mod 4;
+ js:=Trunc(jd+1.5) Mod 7;
+ RWriteLn('');
+ RWriteLn('Date et TE : '+sem[js]+FmtI(qu,3)+' '+mth[ms]+FmtI(an,6)
+          +'  '+FmtI(hr,2)+'h'+FmtI(mn,3)+'m'+FmtF(sc,8,4)+'s');
+ RWriteLn('Jour julien                                  : '+FmtF(jd,20,10));
+ RWriteLn('Donnees geocentriques :');
+ RWriteLn('Longitude selenographique de la Terre lambda : '+FmtF(lc,8,4));
+ RWriteLn('Latitude selenographique de la Terre beta    : '+FmtF(bc,8,4));
+ RWriteLn('Angle de position du point subsolaire theta  : '+FmtF(th0,8,4));
+ RWriteLn('Fraction illuminee du disque k               : '+FmtF(fil,8,6));
+ RWriteLn('Angle de position du pole P                  : '+FmtF(ap,8,4));
+ RWriteLn('Angle de phase i                             : '+FmtF(aph,9,4));
+ RWriteLn('Angle de phase ecliptique                    : '+FmtF(dlg,9,4));
+ RWriteLn('Position selenographique du Soleil           : '+FmtF(ls,9,4)+FmtF(cls,10,4)+FmtF(bs,10,4));
+ RWriteLn('Elongation et elongation ecliptique          : '+FmtF(elg,9,4)+FmtF(ecl,10,4));
+ Case cor Of
+  0 : RWriteLn('Phase geocentrique : entre NL et PQ.');
+  1 : RWriteLn('Phase geocentrique : entre PQ et PL.');
+  2 : RWriteLn('Phase geocentrique : entre PL et DQ.');
+  3 : RWriteLn('Phase geocentrique : entre DQ et NL.');
+ End;
+ t:=(jd-2451545)/365250;
+ ts:=24110.54841+t*(86401848.12866+t*(9.3104-0.0062*t))+(hr*60+mn)*60+sc;
+ ts:=(15*ts+dpsi*cos(eps))/54000;
+ ts:=ts-24.0*int(ts/24.0);
+ If ts<0.0 Then ts:=ts+24.0;
+ ah:=(ts*pi/12)-lg;
+ x:=x9-rcp*cos(ah);
+ y:=y9-rcp*sin(ah);
+ z:=z9-rsp;
+ If x<>0 Then ai:=arctan(y/x) Else ai:=pi*y/Abs(2*x);
+ If x<0 Then ai:=ai+pi;
+ If ai<0 Then ai:=ai+2*pi;
+ di:=arctan(z/sqrt(x*x+y*y));
+ x:=cos(di)*sin(d0)*cos(a0-ai)-sin(di)*cos(d0);
+ y:=-sin(a0-ai)*cos(di);
+ z:=-(cos(di)*cos(d0)*cos(a0-ai)+sin(di)*sin(d0));
+ u:=cos(di)*sin(d0)-sin(di)*cos(d0)*cos(a0-ai);
+ v:=sin(a0-ai)*cos(d0);
+ us:=sin(ds)*cos(di)-cos(ds)*sin(di)*cos(asA-ai);
+ vs:=sin(asA-ai)*cos(ds);
+ ws:=-(cos(ds)*cos(di)*cos(asA-ai)+sin(ds)*sin(di));
+ ap:=arctan(v/u)*180/pi;
+ If ap<0 Then ap:=ap+360;
+ fil:=(1+ws)/2;
+ If u<>0 Then ap:=arctan(v/u)*180/pi Else If v=0 Then ap:=0 Else ap:=90*v/Abs(v);
+ If u<0 Then ap:=ap+180;
+ If ap<0 Then ap:=ap+360;
+ If x<>0 Then lc:=arctan(y/x)*180/pi Else lc:=90*y/Abs(y);
+ If x<0 Then lc:=lc+180;
+ lc:=90+lc-wM;
+ lc:=lc-360*int(lc/360);
+ If lc<0 Then lc:=lc+360;
+ If lc>180 Then lc:=lc-360;
+ If us<>0 Then th0:=arctan(vs/us)*180/pi Else If vs=0 Then th0:=0 Else th0:=90*vs/Abs(vs);
+ If us<0 Then th0:=th0+180;
+ If th0<0 Then th0:=th0+360;
+ xs:=x0+rcp*cos(ah);
+ ys:=y0+rcp*sin(ah);
+ zs:=z0+rsp;
+ us:=x9-rcp*cos(ah);
+ vs:=y9-rcp*sin(ah);
+ ws:=z9-rsp;
+ x:=vs*zs-ys*ws;
+ u:=ws*xs-zs*us;
+ v:=us*ys-xs*vs;
+ y:=u*cos(eps)+v*sin(eps);
+ z:=v*cos(eps)-u*sin(eps);
+ u:=z*sqrt(x*x+y*y+z*z)/Abs(z);
+ v:=us*(us+xs)+vs*(vs+ys)+ws*(ws+zs);
+ If v<>0 Then aph:=180*arctan(u/v)/pi Else aph:=90*u/Abs(u);
+ If v<0 Then aph:=aph+180;
+ If aph>180 Then aph:=aph-360;
+ wrk:=-(xs*us+ys*vs+zs*ws);
+ If wrk<>0 Then elg:=180*arctan(u/wrk)/pi Else elg:=90*u/Abs(u);
+ If wrk<0 Then elg:=elg+180;
+ If elg>180 Then elg:=elg-360;
+ v:=us*(us+xs)+vs*(vs+ys)*cos(eps)*cos(eps)+ws*(ws+zs)*sin(eps)*sin(eps)+(ws*(vs+ys)+vs*(ws+zs))*cos(eps)*sin(eps);
+ If v<>0 Then dlg:=180*arctan(z/v)/pi Else dlg:=90*z/Abs(z);
+ If v<0 Then dlg:=dlg+180;
+ If dlg>180 Then dlg:=dlg-360;
+ wrk:=-(us*xs+vs*ys*cos(eps)*cos(eps)+ws*zs*sin(eps)*sin(eps)+(ws*ys+vs*zs)*cos(eps)*sin(eps));
+ If wrk<>0 Then ecl:=180*arctan(z/wrk)/pi Else ecl:=90*z/Abs(z);
+ If wrk<0 Then ecl:=ecl+180;
+ If ecl>180 Then ecl:=ecl-360;
+ cor:=Trunc((ecl+360)/90) Mod 4;
+ RWriteLn('Donnees topocentriques :');
+ RWriteLn('Longitude selenographique de la Terre lambda : '+FmtF(lc,8,4));
+ RWriteLn('Latitude selenographique de la Terre beta    : '+FmtF(bc,8,4));
+ RWriteLn('Angle de position du point subsolaire theta  : '+FmtF(th0,8,4));
+ RWriteLn('Fraction illuminee du disque k               : '+FmtF(fil,8,6));
+ RWriteLn('Angle de position du pole P                  : '+FmtF(ap,8,4));
+ RWriteLn('Angle de phase i                             : '+FmtF(aph,9,4));
+ RWriteLn('Angle de phase ecliptique                    : '+FmtF(dlg,9,4));
+ RWriteLn('Elongation et elongation ecliptique          : '+FmtF(elg,9,4)+FmtF(ecl,10,4));
+ Case cor Of
+  0 : RWriteLn('Phase topocentrique : entre NL et PQ.');
+  1 : RWriteLn('Phase topocentrique : entre PQ et PL.');
+  2 : RWriteLn('Phase topocentrique : entre PL et DQ.');
+  3 : RWriteLn('Phase topocentrique : entre DQ et NL.');
+ End;
+
+ If YesNo('Selenographie','Positions selenographiques de details a calculer ?') Then
+  Begin
+   If YesNo('Selenographie','Coordonnees polaires (Non = cartesiennes) ?') Then tpc:='P' Else tpc:='C';
+   bc:=pi*bc/180;
+   lc:=pi*lc/180;
+   d:=0;
+   If Not InputReal('Selenographie','Diametre apparent de la Lune sur cliche/dessin :',d) Then Exit;
+   If d<=0 Then Begin ShowMessage('Erreur','Diametre <= 0'); Exit; End;
+   fev:=sqrt(r9*r9-3018558.76)*d/3474.8;
+   RWriteLn('Calcul de positions selenographiques. Diametre lunaire : '+FmtF(d,8,3));
+   Cont:=True;
+   While Cont Do
+    Begin
+     s:=0; th:=0;
+     If tpc='P' Then
+      Begin
+       If Not InputReal('Selenographie','Distance r au centre (rau) :',s) Then Break;
+       If Not InputReal('Selenographie','Angle de position theta (deg) :',th) Then Break;
+       x:=s*cos(pi*th/180);
+       y:=s*sin(pi*th/180);
+      End
+     Else
+      Begin
+       If Not InputReal('Selenographie','Coordonnee X (vers Nord) :',x) Then Break;
+       If Not InputReal('Selenographie','Coordonnee Y (vers Ouest) :',y) Then Break;
+       s:=sqrt(x*x+y*y);
+       If x<>0 Then th:=arctan(y/x) Else If s=0 Then th:=0 Else th:=90*y/Abs(y);
+       If x<0 Then th:=th+180;
+       If th<0 Then th:=th+180;
+      End;
+     RWriteLn('Distance au centre       : '+FmtF(s,8,3));
+     RWriteLn('Angle de position        : '+FmtF(th,5,1));
+     RWriteLn('Coordonnees cartesiennes : '+FmtF(x,10,3)+FmtF(y,10,3));
+     If 2*s>d Then RWriteLn('*** Erreur dans la mesure : 2*s > d ***')
+     Else
+      Begin
+       th:=pi*(ap-th)/180;
+       s:=arctan(s/fev);
+       wrk:=r9*sin(s)/1737.4;
+       If wrk>=1.0 Then s:=(pi/2)-s Else s:=arctan(wrk/sqrt(1-wrk*wrk))-s;
+       x:=(cos(s)*cos(bc)-sin(s)*sin(bc)*cos(th))*cos(lc);
+       x:=x-sin(s)*sin(th)*sin(lc);
+       y:=(cos(s)*cos(bc)-sin(s)*sin(bc)*cos(th))*sin(lc);
+       y:=y+sin(s)*sin(th)*cos(lc);
+       z:=sin(bc)*cos(s)+cos(bc)*sin(s)*cos(th);
+       If x<>0 Then l:=arctan(y/x)*180/pi
+       Else
+        Begin
+         If y<0 Then l:=270;
+         If y>0 Then l:=90;
+         If y=0 Then l:=0;
+        End;
+       If x<0 Then l:=l+180;
+       If l>180 Then l:=l-360;
+       b:=arctan(z/sqrt(x*x+y*y))*180/pi;
+       RWriteLn('L = '+FmtF(l,6,2)+'   B = '+FmtF(b,6,2));
+      End;
+     Cont:=YesNo('Selenographie','Un autre point ?');
+    End;
+  End;
+ ResultsShow;
+End;
+
+{ ========================================================================== }
+{ ==== SATELLITES GALILEENS DE JUPITER (verbatim SAT1.PAS SatelJup) ======== }
+{ ========================================================================== }
 Procedure DoSateljup;
-Begin ShowMessage('A integrer','Satellites Jupiter : Phase 9 (SAT1.PAS).'); End;
+Var
+ psi,g,gp,phil,pij,xx,yx,zx,xy,yy,zy,xz,yz,zz : Extended;
+ rvs1,lgs1,bts1,xs1,ys1,zs1,us1,vs1,ws1,dga1,l1,p1,n1,xi1,nu1,dz1 : Extended;
+ rvs2,lgs2,bts2,xs2,ys2,zs2,us2,vs2,ws2,dga2,l2,p2,n2,xi2,nu2,dz2 : Extended;
+ rvs3,lgs3,bts3,xs3,ys3,zs3,us3,vs3,ws3,dga3,l3,p3,n3,xi3,nu3,dz3 : Extended;
+ rvs4,lgs4,bts4,xs4,ys4,zs4,us4,vs4,ws4,dga4,l4,p4,n4,xi4,nu4,dz4 : Extended;
+ xs5,ys5,zs5,us5,vs5,ws5,ap,imaj,imin,phi,omg : Extended;
+ hs1,hs2,hs3,hs4 : Char;
+
+ Procedure CalcLng;
+ Begin
+  nu1:=47259*sin(2*(l1-l2))+3480*sin(p4-p3)+1756*sin(2*(pij+g)-p1-p4);
+  nu1:=nu1+1080*sin(l2-2*l3+p3)+757*sin(phil)+663*sin(l2-2*l3+p4);
+  nu1:=nu1+453*sin(l1-p3)+453*sin(l2-2*l3+p2)+354*sin(l2-l1);
+  nu1:=nu1+317*sin(2*(pij-psi))+269*sin(2*l3-l2-p1)+263*sin(l1-p4);
+  nu1:=nu1+186*sin(l1-p1)-186*sin(-g)+167*sin(p2-p3)+158*sin(4*(l1-l2));
+  nu1:=nu1+155*sin(l3-l1)+142*sin(2*(pij+g)-psi-p3)+115*sin(4*l2-2*l1-2*n2);
+  nu1:=nu1+89*sin(p2-p4)+84*sin(l1+p3-2*(pij+g))+84*sin(n2-n3)+53*sin(psi-n2);
+  nu2:=106476*sin(2*(l2-l3))+4253*sin(l1+p3-2*l2)+3579*sin(l2-p3);
+  nu2:=nu2+2383*sin(l1+p4-2*l2)+1977*sin(l2-p4)-1843*sin(phil)+1299*sin(p3-p4);
+  nu2:=nu2+1142*sin(l3-l2)+1078*sin(l2-p2)-1058*sin(g)+870*sin(l2-2*l3+p2);
+  nu2:=nu2+775*sin(2*(pij-psi))+524*sin(2*(l1-l2))+460*sin(l3-l1);
+  nu2:=nu2+450*sin(l2+p1-2*l3)+327*sin(psi+n3-2*(pij+g))+296*sin(2*(pij+g)-p1-p3);
+  nu2:=nu2-151*sin(2*g)+146*sin(psi-n3)+125*sin(psi-n4)+117*sin(2*l3-l1-p3);
+  nu2:=nu2+95*sin(2*(n2-l2))+86*sin(2*g-5*gp-((2089*pi)/7200));
+  nu2:=nu2+86*sin(2*(l1+n2-2*l2))+78*sin(l4-l2)+64*sin(2*l3-l1-p4);
+  nu2:=nu2+63*sin(7*l4-3*l3-4*p4)+61*sin(p1-p4)+58*sin(2*(psi-pij-g));
+  nu2:=nu2+58*sin(n3-n4)+56*sin(2*(l2-l4))+55*sin(2*(l1-l3));
+  nu2:=nu2+52*sin(p3+3*(l3+p4)-7*l4)+43*sin(p3-l1)+42*sin(p3-p2);
+  nu2:=nu2+41*sin(5*(l2-l3))+41*sin(p4-pij)+38*sin(l2-p1)+32*sin(n2-n3);
+  nu2:=nu2+32*sin(2*(l3-g-pij))+29*sin(p1-p3);
+  nu3:=16477*sin(l3-p3)+9062*sin(l3-p4)+6907*sin(l3-l2)+3786*sin(p3-p4);
+  nu3:=nu3+1844*sin(2*(l3-l4))-1340*sin(g)+703*sin(l2+p3-2*l3);
+  nu3:=nu3+670*sin(2*(pij-psi))+540*sin(l4-l3)+481*sin(p1+p3-2*(pij+g));
+  nu3:=nu3+409*sin(2*l3-l2-p2)+379*sin(l2+p4-2*l3)+235*sin(psi-n3);
+  nu3:=nu3+198*sin(psi-n4)+180*sin(phil)+129*sin(3*(l3-l4))+124*sin(l1-l3);
+  nu3:=nu3+119*sin(2*g-5*gp-((2089*pi)/7200))+109*sin(l2-l1);
+  nu3:=nu3+99*sin(7*l4-3*l3-4*p4)+91*sin(n3-n4)+81*sin(3*(l3+p4)+p3-7*l4);
+  nu3:=nu3+76*sin(3*l3-2*l2-p3)+69*sin(p4-pij)+58*sin(3*l4-2*l3-p4);
+  nu3:=nu3+57*sin(l3+p3-2*(pij+g))+57*sin(2*l4-l3-p4)+52*sin(p3-p2);
+  nu3:=nu3+52*sin(2*l3-l2-p1)+48*sin(l3+p3-2*l4)+45*sin(3*l3-2*l2-p4);
+  nu3:=nu3+41*sin(p4-p2)-38*sin(2*g)+33*sin(p4+n4-p3-n3);
+  nu3:=nu3+32*sin(7*l4-3*l3-2*(p3+p4))+30*sin(4*(l3-l4));
+  nu3:=nu3+29*sin(2*(pij+g)-n3-psi)+29*sin(l3+p4-2*(pij+g));
+  nu3:=nu3+26*sin(l3-pij-g)+24*sin(l2+2*l4-3*l3)+21*sin(2*(l3-pij-g));
+  nu3:=nu3+21*sin(p2-l3)+17*sin(2*(l3-p3));
+  nu4:=84109*sin(l4-p4)+3429*sin(p4-p3)-3305*sin(2*(psi-pij))-3211*sin(g);
+  nu4:=nu4-1860*sin(l4-p3)+1182*sin(psi-n4)+622*sin(l4+p4-2*(g+pij));
+  nu4:=nu4+385*sin(2*(l4-p4))-284*sin(5*gp-2*g+((2089*pi)/7200));
+  nu4:=nu4-233*sin(2*(psi-p4))-223*sin(l3-l4)-208*sin(l4-pij);
+  nu4:=nu4+177*sin(psi+n4-2*p4)+134*sin(p4-pij)+125*sin(2*(l4-g-pij));
+  nu4:=nu4-117*sin(2*g)-112*sin(2*(l3-l4))+106*sin(3*l3+4*p4-7*l4);
+  nu4:=nu4+102*sin(l4-g-pij)+96*sin(2*l4-psi-n4)+87*sin(2*(psi-n4));
+  nu4:=nu4-87*sin(3*(l3+p4)+p3-7*l4)+85*sin(l3+p4-2*l4)-81*sin(2*(l4-psi));
+  nu4:=nu4+71*sin(l4+p4-2*pij-3*g)+60*sin(l1-l4)-56*sin(psi-n3);
+  nu4:=nu4-55*sin(l3+n3-2*l4)+51*sin(l2-l4)+42*sin(2*(psi-g-pij));
+  nu4:=nu4+39*sin(2*(p4-n4))+36*sin(pij+psi-p4-n4);
+  nu4:=nu4+35*sin(2*gp-g+((2093*pi)/2000))-35*sin(l4-p4+2*(pij-psi));
+  nu4:=nu4-32*sin(l4+p4-g-2*pij)+30*sin(3*l3+2*(p3+p4)-7*l4);
+  nu4:=nu4+30*sin(2*(gp-g)+((2983*pi)/3600))+28*sin(l4-p4-2*(pij-psi))-28*sin(2*(l4-n4));
+  nu4:=nu4-27*sin(p3+n3-p4-n4)-26*sin(5*gp-3*g+((2093*pi)/2000))+25*sin(n4-n3);
+  nu4:=nu4-25*sin(l2+2*l4-3*l3)-23*sin(3*(l3-l4))+21*sin(2*(l4-pij)-3*g);
+  nu4:=nu4-21*sin(2*l3+p4-3*l4)+19*sin(l4-p4-g)-19*sin(2*l4-p3-p4);
+  nu4:=nu4-18*sin(l4+g-n4)-16*sin(l4+p3-2*(pij+g));
+  nu1:=pi*nu1/18000000.0;
+  nu2:=pi*nu2/18000000.0;
+  nu3:=pi*nu3/18000000.0;
+  nu4:=pi*nu4/18000000.0;
+ End;
+
+ Procedure CalcLat;
+ Begin
+  dz1:=6502*sin(l1+nu1-n1)+1835*sin(l1+nu1-n2)+329*sin(l1+nu1-n3);
+  dz1:=dz1+311*sin(psi-l1-nu1)+93*sin(l1+nu1-n4);
+  dz1:=dz1+75*sin(3*l1+1.0073*nu1+n2-4*l2)+46*sin(l1+nu1+psi-2*(pij+g));
+  dz2:=81275*sin(l2+nu2-n2)+4512*sin(l2+nu2-n3)+3286*sin(psi-l2-nu2);
+  dz2:=dz2+1164*sin(l2+nu2-n4)+273*sin(l1+1.0146*nu2+n2-2*l3);
+  dz2:=dz2+143*sin(l2+nu2-2*(pij+g))-143*sin(l2+nu2-n1)+35*sin(l2+nu2+g-psi);
+  dz2:=dz2-28*sin(l1+n3+1.0146*nu2-2*l3);
+  dz3:=32364*sin(l3+nu3-n3)+16911*sin(psi-l3-nu3)+6849*sin(l3+nu3-n4);
+  dz3:=dz3-2806*sin(l3+nu3-n2)+321*sin(l3+nu3+psi-2*(pij+g));
+  dz3:=dz3+51*sin(l3+nu3-psi+g)-45*sin(l3+nu3-psi-g)-45*sin(l3+nu3-psi-2*pij);
+  dz3:=dz3+37*sin(l3+nu3-psi-2*pij-3*g)+30*sin(2*l2+1.03*nu3-3*l3+n2);
+  dz3:=dz3-21*sin(2*l2+1.03*nu3-3*l3+n3);
+  dz4:=44148*sin(l4+nu4-n4)-76579*sin(l4+nu4-psi)-5106*sin(l4+nu4-n3);
+  dz4:=dz4+773*sin(l4+nu4+psi-2*(pij+g))+104*sin(l4+nu4-psi+g);
+  dz4:=dz4-102*sin(l4+nu4-psi-g)+88*sin(l4+nu4+psi-2*pij-3*g);
+  dz4:=dz4-38*sin(l4+nu4+psi-2*pij-g);
+  dz1:=dz1/10000000.0;
+  dz2:=dz2/10000000.0;
+  dz3:=dz3/10000000.0;
+  dz4:=dz4/10000000.0;
+  dz1:=dz1/sqrt(1+dz1*dz1);
+  dz2:=dz2/sqrt(1+dz2*dz2);
+  dz3:=dz3/sqrt(1+dz3*dz3);
+  dz4:=dz4/sqrt(1+dz4*dz4);
+ End;
+
+ Procedure CalcDst;
+ Begin
+  xi1:=10000000.0-41339*cos(2*(l1-l2))-395*cos(l1-p3)-214*cos(l1-p4);
+  xi1:=xi1+170*cos(l1-l2)-162*cos(l1-p1)-130*cos(4*(l1-l2))+106*cos(l1-l3);
+  xi1:=(xi1-63*cos(l1+p3-2*(pij+g)))/10000000.0;
+  xi2:=10000000.0+93847*cos(l1-l2)-3114*cos(l2-p3)-1738*cos(l2-p4);
+  xi2:=xi2-941*cos(l2-92)+553*cos(l2-l3)+523*cos(l1-l3)-290*cos(2*(l1-l2));
+  xi2:=xi2+166*cos(2*(l2-n2))+107*cos(l1+p3-2*l3)-102*cos(l1-p1);
+  xi2:=(xi2-91*cos(2*(l1-l3)))/10000000.0;
+  xi3:=10000000.0-14377*cos(l3-p3)-7904*cos(l3-p4)+6342*cos(l2-l3);
+  xi3:=xi3-1758*cos(2*(l3-l4))+294*cos(l3-l4)-156*cos(3*(l3-l4));
+  xi3:=xi3+155*cos(l1-l3)-153*cos(l1-l2)+70*cos(2*l2+p3-3*l3);
+  xi3:=(xi3-51*cos(l3+p3-2*(pij+g)))/10000000.0;
+  xi4:=10000000.0-73391*cos(l4-p4)+1620*cos(l3-p3)+974*cos(l3-l4);
+  xi4:=xi4-541*cos(l4+p4-2*(pij+g))-269*cos(2*(l4-p4))+182*cos(l4-pij);
+  xi4:=xi4+177*cos(2*(l3-l4))-167*cos(2*l4-n4-psi)+167*cos(psi-n4);
+  xi4:=xi4-155*cos(2*(l4-pij-g))+142*cos(2*(l4-psi))+104*cos(l1-l4);
+  xi4:=xi4/10000000.0;
+ End;
+
+Begin
+ If Not InputDateTime('Satellites Jupiter - Date et TE',qu,ms,an,hr,mn,sc) Then Exit;
+ jd:=jj(qu,ms,an,hr,mn,sc);
+ Jupiter;
+ dga1:=421768.31;
+ dga2:=671076.90;
+ dga3:=1070425.42;
+ dga4:=1882754.43;
+ pij:=13.469942*pi/180;
+ dt:=(jd-2433282.423)/36525.0;
+ wrk:=(1.3966626+0.0003088*dt)*dt;
+ dt:=(jd-2451545.0)/36525.0;
+ omg:=pi*(100.464441+dt*(1.020955+dt*(0.000040117+0.000000569*dt)))/180.0;
+ imin:=pi*(1.303270-dt*(0.0054966-dt*(0.00000465-0.000000004*dt)))/180.0;
+ imaj:=pi*(3.120862+0.0006*dt)/180;
+ dt:=jd-2443000.5-(d4/JLM);
+ l1:=106.07947+wrk+203.488955432*dt;
+ l2:=175.72938+wrk+101.374724550*dt;
+ l3:=120.55434+wrk+50.317609110*dt;
+ l4:=84.44868+wrk+21.571071314*dt;
+ l1:=l1-360*int(l1/360); If l1<0 Then l1:=l1+360; l1:=pi*l1/180;
+ l2:=l2-360*int(l2/360); If l2<0 Then l2:=l2+360; l2:=pi*l2/180;
+ l3:=l3-360*int(l3/360); If l3<0 Then l3:=l3+360; l3:=pi*l3/180;
+ l4:=l4-360*int(l4/360); If l4<0 Then l4:=l4+360; l4:=pi*l4/180;
+ p1:=58.3329+0.16103936*dt;
+ p2:=132.8959+0.04647985*dt;
+ p3:=187.2887+0.00712740*dt;
+ p4:=335.3418+0.00183998*dt;
+ p1:=p1-360*int(p1/360); If p1<0 Then p1:=p1+360; p1:=pi*p1/180;
+ p2:=p2-360*int(p2/360); If p2<0 Then p2:=p2+360; p2:=pi*p2/180;
+ p3:=p3-360*int(p3/360); If p3<0 Then p3:=p3+360; p3:=pi*p3/180;
+ p4:=p4-360*int(p4/360); If p4<0 Then p4:=p4+360; p4:=pi*p4/180;
+ n1:=311.0793-0.13279430*dt;
+ n2:=100.5099-0.03263047*dt;
+ n3:=119.1688-0.00717704*dt;
+ n4:=322.5729-0.00175934*dt;
+ n1:=n1-360*int(n1/360); If n1<0 Then n1:=n1+360; n1:=pi*n1/180;
+ n2:=n2-360*int(n2/360); If n2<0 Then n2:=n2+360; n2:=pi*n2/180;
+ n3:=n3-360*int(n3/360); If n3<0 Then n3:=n3+360; n3:=pi*n3/180;
+ n4:=n4-360*int(n4/360); If n4<0 Then n4:=n4+360; n4:=pi*n4/180;
+ phil:=191.8132+0.17390023*dt;
+ phil:=phil-360*int(phil/360); If phil<0 Then phil:=phil+360; phil:=pi*phil/180;
+ psi:=316.5182+wrk-0.00000208*dt;
+ psi:=psi-360*int(psi/360); If psi<0 Then psi:=psi+360; psi:=pi*psi/180;
+ g:=30.23756+0.0830925701*dt;
+ wrk:=163.679+0.0010512*dt;
+ wrk:=wrk-360*int(wrk/360);
+ g:=g+0.33033*sin(pi*wrk/180);
+ wrk:=34.486-0.0161731*dt;
+ wrk:=wrk-360*int(wrk/360);
+ g:=g+0.03439*sin(pi*wrk/180);
+ g:=g-360*int(g/360); If g<0 Then g:=g+360;
+ gp:=31.97853+0.0334597339*dt;
+ gp:=gp-360*int(gp/360); If gp<0 Then gp:=gp+360; gp:=pi*gp/180;
+ CalcLng;
+ CalcLat;
+ CalcDst;
+ xs1:=dga1*xi1*sqrt(1-dz1*dz1)*cos(l1-psi+nu1);
+ ys1:=dga1*xi1*sqrt(1-dz1*dz1)*sin(l1-psi-nu1);
+ zs1:=dga1*xi1*dz1;
+ xs2:=dga2*xi2*sqrt(1-dz2*dz2)*cos(l2-psi+nu2);
+ ys2:=dga2*xi2*sqrt(1-dz2*dz2)*sin(l2-psi-nu2);
+ zs2:=dga2*xi2*dz2;
+ xs3:=dga3*xi3*sqrt(1-dz3*dz3)*cos(l3-psi+nu3);
+ ys3:=dga3*xi3*sqrt(1-dz3*dz3)*sin(l3-psi-nu3);
+ zs3:=dga3*xi3*dz3;
+ xs4:=dga4*xi4*sqrt(1-dz4*dz4)*cos(l4-psi+nu4);
+ ys4:=dga4*xi4*sqrt(1-dz4*dz4)*sin(l4-psi-nu4);
+ zs4:=dga4*xi4*dz4;
+ wrk:=psi-omg;
+ us1:=xs1; vs1:=ys1*cos(imaj)-zs1*sin(imaj); zs1:=ys1*sin(imaj)+zs1*cos(imaj);
+ xs1:=us1*cos(wrk)-vs1*sin(wrk); ys1:=us1*sin(wrk)+vs1*cos(wrk);
+ us2:=xs2; vs2:=ys2*cos(imaj)-zs2*sin(imaj); zs2:=ys2*sin(imaj)+zs2*cos(imaj);
+ xs2:=us2*cos(wrk)-vs2*sin(wrk); ys2:=us2*sin(wrk)+vs2*cos(wrk);
+ us3:=xs3; vs3:=ys3*cos(imaj)-zs3*sin(imaj); zs3:=ys3*sin(imaj)+zs3*cos(imaj);
+ xs3:=us3*cos(wrk)-vs3*sin(wrk); ys3:=us3*sin(wrk)+vs3*cos(wrk);
+ us4:=xs4; vs4:=ys4*cos(imaj)-zs4*sin(imaj); zs4:=ys4*sin(imaj)+zs4*cos(imaj);
+ xs4:=us4*cos(wrk)-vs4*sin(wrk); ys4:=us4*sin(wrk)+vs4*cos(wrk);
+ us1:=xs1; vs1:=ys1*cos(imin)-zs1*sin(imin); zs1:=ys1*sin(imin)+zs1*cos(imin);
+ xs1:=us1*cos(omg)-vs1*sin(omg); ys1:=us1*sin(omg)+vs1*cos(omg);
+ us2:=xs2; vs2:=ys2*cos(imin)-zs2*sin(imin); zs2:=ys2*sin(imin)+zs2*cos(imin);
+ xs2:=us2*cos(omg)-vs2*sin(omg); ys2:=us2*sin(omg)+vs2*cos(omg);
+ us3:=xs3; vs3:=ys3*cos(imin)-zs3*sin(imin); zs3:=ys3*sin(imin)+zs3*cos(imin);
+ xs3:=us3*cos(omg)-vs3*sin(omg); ys3:=us3*sin(omg)+vs3*cos(omg);
+ us4:=xs4; vs4:=ys4*cos(imin)-zs4*sin(imin); zs4:=ys4*sin(imin)+zs4*cos(imin);
+ xs4:=us4*cos(omg)-vs4*sin(omg); ys4:=us4*sin(omg)+vs4*cos(omg);
+ vs1:=ys1*cos(eps)-zs1*sin(eps); ws1:=ys1*sin(eps)+zs1*cos(eps); us1:=xs1;
+ vs2:=ys2*cos(eps)-zs2*sin(eps); ws2:=ys2*sin(eps)+zs2*cos(eps); us2:=xs2;
+ vs3:=ys3*cos(eps)-zs3*sin(eps); ws3:=ys3*sin(eps)+zs3*cos(eps); us3:=xs3;
+ vs4:=ys4*cos(eps)-zs4*sin(eps); ws4:=ys4*sin(eps)+zs4*cos(eps); us4:=xs4;
+ wrk:=pi*ad4/12;
+ dt:=pi*dc4/180;
+ zx:=-cos(wrk)*cos(dt); zy:=-sin(wrk)*cos(dt); zz:=-sin(dt);
+ yx:=-cos(wrk)*sin(dt); yy:=-sin(wrk)*sin(dt); yz:=cos(dt);
+ xx:=-sin(wrk); xy:=cos(wrk); xz:=0;
+ xs1:=xx*us1+xy*vs1+xz*ws1; ys1:=yx*us1+yy*vs1+yz*ws1; zs1:=zx*us1+zy*vs1+zz*ws1;
+ xs2:=xx*us2+xy*vs2+xz*ws2; ys2:=yx*us2+yy*vs2+yz*ws2; zs2:=zx*us2+zy*vs2+zz*ws2;
+ xs3:=xx*us3+xy*vs3+xz*ws3; ys3:=yx*us3+yy*vs3+yz*ws3; zs3:=zx*us3+zy*vs3+zz*ws3;
+ xs4:=xx*us4+xy*vs4+xz*ws4; ys4:=yx*us4+yy*vs4+yz*ws4; zs4:=zx*us4+zy*vs4+zz*ws4;
+ xs1:=arctan(xs1/(d4+zs1))*648000.0/pi; ys1:=arctan(ys1/(d4+zs1))*648000.0/pi;
+ If zs1<0 Then hs1:='P' Else hs1:='E';
+ xs2:=arctan(xs2/(d4+zs2))*648000.0/pi; ys2:=arctan(ys2/(d4+zs2))*648000.0/pi;
+ If zs2<0 Then hs2:='P' Else hs2:='E';
+ xs3:=arctan(xs3/(d4+zs3))*648000.0/pi; ys3:=arctan(ys3/(d4+zs3))*648000.0/pi;
+ If zs3<0 Then hs3:='P' Else hs3:='E';
+ xs4:=arctan(xs4/(d4+zs4))*648000.0/pi; ys4:=arctan(ys4/(d4+zs4))*648000.0/pi;
+ If zs4<0 Then hs4:='P' Else hs4:='E';
+ xx:=arctan(71492/d4)*1296000.0/pi;
+ xy:=arctan(66854/d4)*1296000.0/pi;
+ zs1:=arctan(1821.3/(d4+zs1))*1296000.0/pi;
+ zs2:=arctan(1565/(d4+zs2))*1296000.0/pi;
+ zs3:=arctan(2634/(d4+zs3))*1296000.0/pi;
+ zs4:=arctan(2403/(d4+zs4))*1296000.0/pi;
+ cor:=Trunc(jd+1.5) Mod 7;
+ RClear;
+ ResultTitle:='Satellites galileens de Jupiter';
+ RWriteLn('Date et TE  : '+sem[cor]+FmtI(qu,3)+' '+mth[ms]+FmtI(an,6)
+          +'  '+FmtI(hr,2)+'h'+FmtI(mn,3)+'m'+FmtF(sc,8,4)+'s');
+ RWriteLn('Jour julien : '+FmtF(jd,15,7));
+ RWriteLn('Coordonnees differentielles (secondes d''arc) :');
+ RWriteLn('P = satellite en avant de la planete ; E = en arriere.');
+ RWriteLn('Io       : '+FmtF(xs1,10,3)+FmtF(ys1,10,3)+'  '+hs1);
+ RWriteLn('Europe   : '+FmtF(xs2,10,3)+FmtF(ys2,10,3)+'  '+hs2);
+ RWriteLn('Ganymede : '+FmtF(xs3,10,3)+FmtF(ys3,10,3)+'  '+hs3);
+ RWriteLn('Callisto : '+FmtF(xs4,10,3)+FmtF(ys4,10,3)+'  '+hs4);
+ RWriteLn('Diametres apparents (secondes d''arc) :');
+ RWriteLn('Jupiter  : '+FmtF(xx,10,3)+FmtF(xy,10,3));
+ RWriteLn('Io       : '+FmtF(zs1,10,3));
+ RWriteLn('Europe   : '+FmtF(zs2,10,3));
+ RWriteLn('Ganymede : '+FmtF(zs3,10,3));
+ RWriteLn('Callisto : '+FmtF(zs4,10,3));
+ ResultsShow;
+End;
 
 Procedure DoAbout;
 Begin
