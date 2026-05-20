@@ -10,6 +10,18 @@ Apercu de la commande ASTRO :
 
 <img width="640" height="481" alt="image" src="https://github.com/user-attachments/assets/aa669388-c371-478f-abec-83e9d0d32b81" />
 
+<img width="638" height="488" alt="image" src="https://github.com/user-attachments/assets/b3dbc04a-698a-4b66-9b98-09245932bd35" />
+
+<img width="643" height="482" alt="image" src="https://github.com/user-attachments/assets/1a8e66c5-53eb-48ae-bc41-973ae33480db" />
+
+<img width="639" height="475" alt="image" src="https://github.com/user-attachments/assets/dbe2fe84-1cd1-4051-9786-7e819c990651" />
+
+<img width="641" height="481" alt="image" src="https://github.com/user-attachments/assets/ca39fbd5-6bcd-44c7-b7b7-75db39b01510" />
+
+<img width="641" height="480" alt="image" src="https://github.com/user-attachments/assets/90629e20-1b42-4f47-86f6-d3e8b755af7a" />
+
+<img width="640" height="477" alt="image" src="https://github.com/user-attachments/assets/d8a1c956-defa-46ad-a02e-564c401a43ad" />
+
 
 <h2>Liste des fichiers</h2>
 
