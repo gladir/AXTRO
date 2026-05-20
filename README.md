@@ -6,6 +6,11 @@ Apercu de la commande «SIMUPLAN /ORBIT /NAME» :
 
 ![image](https://github.com/user-attachments/assets/ebd44129-3d38-44d7-b7d1-fea5e3d123cb)
 
+Apercu de la commande ASTRO :
+
+<img width="640" height="481" alt="image" src="https://github.com/user-attachments/assets/aa669388-c371-478f-abec-83e9d0d32b81" />
+
+
 <h2>Liste des fichiers</h2>
 
 Voici la liste des différents fichiers proposés dans AXTRO :
